@@ -15,8 +15,8 @@
         "Correr la ingesta con un segundo model_name distinto no borra ni duplica los embeddings del primero"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/ingest_cv.py. Parser LaTeX basado en macro \\seccion{} (no \\section). Chunks: 1 encabezado + 1 educación + 3 experiencias + 5 proyectos + 1 habilidades = 11 chunks. Idempotencia via TRUNCATE CASCADE. Modo --reembed para regenerar embeddings sin re-parsear. Embedding model: paraphrase-multilingual-MiniLM-L12-v2 (384 dims, multilingual). Validado con pytest (13 tests, sin DB). CV_TEX_PATH apunta a data/cv.tex (no data/cv/cv.tex como sugería la spec). docker-compose.yml creado con solo servicio db (app se agrega en US-007)."
     },
     {
       "id": "US-002",

@@ -10,7 +10,7 @@ de que la anterior exista y funcione.
 
 | # | Spec | Depende de | Estado |
 |---|------|-----------|--------|
-| 01 | [db-schema-ingestion](01-db-schema-ingestion.md) | — | pendiente |
+| 01 | [db-schema-ingestion](01-db-schema-ingestion.md) | — | hecho |
 | 02 | [tool-query-cv](02-tool-query-cv.md) | 01 | pendiente |
 | 03 | [tool-query-github](03-tool-query-github.md) | — | pendiente |
 | 04 | [orchestrator-langgraph](04-orchestrator-langgraph.md) | 02, 03 | pendiente |

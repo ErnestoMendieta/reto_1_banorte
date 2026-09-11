@@ -1,0 +1,129 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\setlength{\parindent}{0pt}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage[left=1.06cm,top=1.7cm,right=1.06cm,bottom=1.0cm]{geometry}
+\hypersetup{colorlinks=true, urlcolor=black, linkcolor=black}
+\pagestyle{empty}
+
+% --- Formato de subtítulos de sección (sin numeración, centrados, con línea) ---
+\newcommand{\seccion}[1]{%
+    \vspace{4pt}
+    \begin{center}
+        \textbf{\MakeUppercase{#1}}
+    \end{center}
+    \vspace{-10pt}
+    \hrulefill
+    \vspace{2pt}
+}
+\setlength{\parindent}{10pt}
+\begin{document}
+
+% ============ ENCABEZADO ============
+\begin{center}
+    {\LARGE \textbf{Ernesto Mendieta Cuecuecha}}\\[2pt]
+    Ingeniero en Inteligencia Artificial\\[4pt]
+    Santa Ana Chiautempan, Tlaxcala, México \textbullet\ 222 825 1582 \textbullet\ \href{mailto:ernestomecue@gmail.com}{ernestomecue@gmail.com}\\
+    \href{https://www.linkedin.com/in/ernesto-mendieta-cuecuecha-90135125a/}{linkedin.com/in/ernesto-mendieta-cuecuecha} \textbullet\ \href{https://github.com/ErnestoMendieta}{github.com/ErnestoMendieta}
+\end{center}
+
+% ============ PERFIL PROFESIONAL ============
+\seccion{Perfil Profesional}
+
+\hspace{\parindent} Ingeniero en Inteligencia Artificial egresado del Instituto Politécnico Nacional, con experiencia aplicada en aprendizaje automático, LLM's y visión artificial. Dominio de Python, ElevenLabs y Hugging Face, con experiencia en desarrollo de sistemas de llamadas multiagente de inteligencia artifical y comportamiento de LLM's. Historial comprobado en proyectos de detección de objetos, análisis de sentimientos y segmentación semántica, con enfoque en resultados medibles y trabajo colaborativo bajo metodologías ágiles. Uso de Agentes de código como Codex y Claude Code.
+
+% ============ EDUCACIÓN ============
+\seccion{Educación}
+
+\textbf{Instituto Politécnico Nacional (UPIIT)} \hfill Tlaxcala, México\\
+Ingeniería en Inteligencia Artificial \hfill Agosto 2021 -- Julio 2025
+
+\vspace{8pt}
+
+\textbf{Centro de Bachillerato Tecnológico Industrial y de Servicios No. 03} \hfill Tlaxcala, México\\
+Técnico en Programación -- Cédula Profesional 13982196 \hfill Agosto 2019 -- Julio 2021
+
+% ============ EXPERIENCIA LABORAL ============
+\seccion{Experiencia Laboral}
+
+\textbf{Secretariado Ejecutivo del Sistema Estatal de Seguridad Pública (SESESP)} \hfill Tlaxcala de Xicotencatl\\
+\textbf{Analista de Inteligencia Artificial} \hfill Enero 2026 -- Actualidad
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Implementé herramientas de inteligencia artificial en la extracción de identidades en narrativas de incidentes.
+    \item Desarrollo de sistema multiagente de voz para la atención a la ciudadanía.
+    \item Uso de mejores prácticas de ingeniería de prompts e ingeniería de contexto en agentes de Inteligencia Artificial.
+\end{itemize}
+
+\vspace{8pt}
+
+\textbf{Centro de Innovación y Desarrollo Tecnológico en Cómputo (CIDETEC -- IPN)} \hfill Ciudad de México, México\\
+\textbf{Residente de Prácticas Profesionales -- Visión Artificial} \hfill Enero 2025 -- Mayo 2025
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Desarrolló un proyecto de visión artificial para la segmentación semántica de objetos en entornos urbanos.
+    \item Ajusté (\textit{fine-tuning}) un modelo Transformer con mecanismo de atención sobre el conjunto de datos CityScapes, mejorando la precisión en la identificación de objetos.
+    \item Implementó el proyecto en Python utilizando cómputo paralelo y el framework Hugging Face para optimizar el rendimiento del modelo.
+\end{itemize}
+
+\vspace{8pt}
+
+\textbf{CETis 132} \hfill Tlaxcala, México\\
+\textbf{Profesor de Cálculo Diferencial e Integral} \hfill Septiembre 2024 -- Diciembre 2024
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Impartió clases de Cálculo Diferencial e Integral a estudiantes de nivel medio superior, fortaleciendo su comprensión de los fundamentos de la materia.
+    \item Diseñó material didáctico apoyado en inteligencia artificial generativa para facilitar la comprensión de conceptos complejos.
+    \item Automatizó tareas administrativas y de gestión de clases mediante scripts en Python e integración con Google Classroom, optimizando el tiempo de preparación y calificación.
+\end{itemize}
+ \newpage
+% ============ PROYECTOS ============
+\seccion{Proyectos}
+
+\textbf{Detección de Riesgos Urbanos para Personas con Discapacidad Visual}
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Entrenó un modelo de visión artificial para identificar situaciones de riesgo en entornos urbanos, priorizando bajos tiempos de inferencia y respuesta para asistencia a personas con discapacidad visual.
+\end{itemize}
+
+\vspace{6pt}
+
+\textbf{Chatbot Musical} -- \href{https://github.com/ErnestoMendieta/chatbot-musical-con-lstm}{github.com/ErnestoMendieta/chatbot-musical-con-lstm} \hfill
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Diseñó un chatbot de recomendación musical basado en redes LSTM para modelado de lenguaje y clasificación de sentimientos.
+    \item Integró la API de Spotify mediante autenticación OAuth y una aplicación móvil desarrollada en Flutter como interfaz de usuario.
+\end{itemize}
+
+\vspace{6pt}
+
+\textbf{GunGuardAI} -- \href{https://github.com/ErnestoMCUpiit/DeteccionArmasDeFuego/tree/foo}{github.com/ErnestoMCUpiit/DeteccionArmasDeFuego} \hfill
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Desarrolló una aplicación móvil en Flutter para la detección de armas de fuego mediante un modelo SSD (Single Shot Detection) preentrenado.
+    \item Implementó detección en tiempo real a partir de fotografía y de video capturado con la cámara del dispositivo.
+\end{itemize}
+
+\vspace{6pt}
+
+\textbf{Flotilla App} -- \href{https://github.com/ErnestoMCUpiit/flotillaWeb}{github.com/ErnestoMCUpiit/flotillaWeb} 
+\hfill
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Construyó una aplicación web y móvil (Flutter) para la gestión de flotillas de vehículos de transporte, con acceso y sincronización de datos en tiempo real mediante Firebase.
+\end{itemize}
+
+\vspace{6pt}
+
+\textbf{Seguidor de Trayectoria con Visión Artificial}
+\begin{itemize}[noitemsep, topsep=2pt, partopsep=0pt, parsep=2pt, leftmargin=0.55cm]
+    \item Construyó un seguidor de línea con microcontroladores Arduino y ESP32, utilizando un modelo YOLO preentrenado para clasificar señales de dirección ("izquierda", "derecha", "alto") capturadas por cámara y generar instrucciones de navegación en tiempo real.
+\end{itemize}
+
+% ============ HABILIDADES TÉCNICAS ============
+\seccion{Habilidades Técnicas e Idiomas}
+
+\textbf{Lenguajes de programación:} Python (intermedio), JavaScript (básico)\\
+\vspace{6pt}
+\textbf{Frameworks y herramientas:} TensorFlow, Hugging Face, Flutter, React / React Native, Firebase, Pandas, ElevenLabs, Git / GitHub\\
+\vspace{6pt}
+\textbf{Idiomas:} Español (nativo); Inglés -- Nivel B1, certificado por el Centro de Lenguas Extranjeras del IPN (CENLEX)
+
+\end{document}

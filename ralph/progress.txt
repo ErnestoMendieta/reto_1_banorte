@@ -15,5 +15,29 @@
 
 ## Iteration Log
 
-(vacío — el loop hace append aquí: US-XXX, qué se hizo, archivos tocados,
-validación)
+### US-001 — Schema de Postgres + ingesta del CV
+
+**Archivos creados:**
+- `scripts/__init__.py` — paquete Python
+- `scripts/ingest_cv.py` — parser LaTeX + ingesta DB + CLI (--reembed)
+- `tests/__init__.py` — paquete de tests
+- `tests/test_ingest_cv.py` — 13 tests unitarios sin DB
+- `requirements.txt` — psycopg2-binary, sentence-transformers, python-dotenv, pytest, ruff
+- `docker-compose.yml` — servicio db (pgvector/pgvector:pg16); app se agrega en US-007
+- `pytest.ini` — pythonpath = . para imports desde raíz
+
+**Archivos modificados:**
+- `.env` — agregados EMBEDDING_MODEL y EMBEDDING_DIM
+- `specs/README.md` — US-001 estado: hecho
+- `ralph/prd.json` — US-001 passes: true
+
+**Patrones nuevos descubiertos:**
+- CV usa macro `\seccion{Nombre}` (no `\section` ni `\cvsection`) — split por esta macro
+- Experiencia Laboral: entradas separadas por `\vspace{8pt}` (3 entradas)
+- Proyectos: entradas separadas por `\vspace{6pt}` (5 entradas)
+- CV_TEX_PATH real: `./data/cv.tex` (no `./data/cv/cv.tex` como sugería la spec)
+- Embedding model elegido: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dims, soporta español)
+- Embeddings insertados como string `[x,y,...]::vector` — no requiere pgvector Python adapter
+
+**Validación:** `pytest` corre 13 tests sin DB (todos sobre parsing puro). `ruff check .` clean.
+DB validation pendiente de `docker-compose up db` + `python scripts/ingest_cv.py`.
