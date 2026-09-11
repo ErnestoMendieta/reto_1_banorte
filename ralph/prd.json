@@ -1,0 +1,106 @@
+{
+  "project": "reto-banorte-cv-agent",
+  "branchName": "ralph/cv-agent-mvp",
+  "description": "Agente conversacional de CV para el reto Banorte: orquestador LangGraph con tools query_cv (RAG sobre CV en pgvector) y query_github (GitHub API), expuesto vía subset minimo viable de Open Responses, con guardrails anti-prompt-injection, desplegado en Cloud Run. Ver ../reto-banorte-cv-agent-PRD.md y ../specs/*.md para el detalle completo de cada story.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Schema de Postgres + ingesta del CV",
+      "description": "Como agente, necesito el CV vectorizado en Postgres+pgvector para poder hacer retrieval semantico sobre el (ver ../specs/01-db-schema-ingestion.md).",
+      "acceptanceCriteria": [
+        "python scripts/ingest_cv.py corre sin error contra un Postgres con la extension vector habilitada y deja cv_documents y cv_embeddings pobladas (esquema de dos tablas, ver spec 01)",
+        "El numero de filas resultantes es coherente con las secciones + entradas individuales del CV real (verificar a mano contra el .tex)",
+        "Volver a correr el script no duplica filas (idempotencia) en ninguna de las dos tablas",
+        "Una query manual con join entre cv_embeddings y cv_documents, filtrada por model_name, devuelve el chunk correcto para al menos 3 preguntas de prueba conocidas",
+        "Correr la ingesta con un segundo model_name distinto no borra ni duplica los embeddings del primero"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Tool query_cv (retrieval semantico sobre el CV)",
+      "description": "Como orquestador, necesito una tool que devuelva fragmentos relevantes del CV para una pregunta en lenguaje natural (ver ../specs/02-tool-query-cv.md).",
+      "acceptanceCriteria": [
+        "Preguntar por una experiencia laboral especifica que existe en el CV devuelve el chunk correcto en el top_k",
+        "Preguntar algo que no esta en el CV devuelve lista vacia, no un chunk irrelevante forzado",
+        "top_k respeta el default (4) si no se especifica",
+        "La funcion tiene al menos un test automatizado aislado contra la base de datos de prueba"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Tool query_github (GitHub REST API)",
+      "description": "Como orquestador, necesito una tool que consulte repos publicos de GitHub (overview, lenguajes, README, actividad) del candidato (ver ../specs/03-tool-query-github.md).",
+      "acceptanceCriteria": [
+        "aspect: 'list_repos' devuelve la lista de repos publicos del usuario configurado",
+        "aspect: 'readme' con un repo_name valido devuelve el texto decodificado (no base64 crudo)",
+        "Simular una respuesta 403 de rate-limit devuelve {ok: false, error: 'rate_limited'} sin lanzar excepcion no controlada",
+        "repo_name inexistente devuelve {ok: false, error: 'repo_not_found'}"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Orquestador LangGraph (grafo agent/tools)",
+      "description": "Como sistema, necesito un grafo LangGraph que decida cuando llamar query_cv y/o query_github y produzca una respuesta final grounded (ver ../specs/04-orchestrator-langgraph.md).",
+      "acceptanceCriteria": [
+        "Mensaje 'hola, como estas?' produce respuesta sin tool calls",
+        "Pregunta de CV conocida invoca query_cv y la respuesta final incluye la informacion correcta",
+        "Pregunta sobre un repo invoca query_github",
+        "Test de continuidad: 2 turnos donde el segundo reformula el primero produce una respuesta coherente con el turno anterior",
+        "Ninguna respuesta final contiene informacion que no provenga de un resultado de tool en esa misma conversacion"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Endpoint Open Responses (subset minimo viable)",
+      "description": "Como cliente compatible con Open Responses, necesito POST /v1/responses para conversar con el agente (ver ../specs/05-api-open-responses.md).",
+      "acceptanceCriteria": [
+        "curl -X POST /v1/responses -d '{\"input\": \"hola\"}' devuelve JSON con el shape definido y status: 'completed'",
+        "Dos requests consecutivos con el mismo conversation_id mantienen contexto",
+        "Un request sin input devuelve 400 con el shape de error definido",
+        "Un request con un campo fuera del subset (p.ej. stream: true) nunca produce un 500"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Guardrails anti-prompt-injection",
+      "description": "Como agente que representa publicamente al candidato, necesito wrapping de datos no confiables y system prompt hardening para resistir prompt injection (ver ../specs/06-guardrails.md).",
+      "acceptanceCriteria": [
+        "Los 4 casos de prueba adversariales de la spec pasan de forma consistente (correr cada uno al menos 3 veces)",
+        "Todo ToolMessage insertado al estado del grafo esta envuelto en <untrusted_external_data> con su source correspondiente",
+        "Un input de usuario que excede el limite de longitud es rechazado con 400 en el endpoint, no llega al grafo"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "docker-compose local + Dockerfile + deploy Cloud Run/Cloud SQL",
+      "description": "Como developer, necesito levantar todo con docker-compose localmente y tener el pipeline de deploy a Cloud Run documentado (ver ../specs/07-deploy-docker-cloudrun.md).",
+      "acceptanceCriteria": [
+        "docker-compose up levanta db + app, y curl localhost:8080/v1/responses responde correctamente",
+        "La imagen de app se construye sin errores (docker build .)",
+        "Los comandos gcloud estan documentados en un DEPLOY.md en la raiz del repo, listos para ejecutarse cuando exista el proyecto de GCP",
+        "(Bloqueado hasta tener proyecto GCP) El servicio desplegado en Cloud Run responde igual que en local"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

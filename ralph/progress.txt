@@ -1,0 +1,19 @@
+## Codebase Patterns
+
+> Seed inicial. El loop debe AÑADIR aquí los patrones nuevos que descubra
+> (no borrar los existentes).
+
+- Proyecto arranca vacío (sin código todavía) — la primera story (US-001)
+  crea la estructura base (`scripts/`, schema SQL, dependencias).
+- `.env` ya existe en la raíz con GITHUB_TOKEN y OPENROUTER_API_KEY reales.
+  Faltan agregar ahí: GITHUB_USERNAME, OPENROUTER_MODEL, EMBEDDING_MODEL,
+  EMBEDDING_DIM, CV_TEX_PATH, DATABASE_URL (ver specs/07 para el valor usado
+  en docker-compose).
+- El `.tex` fuente del CV puede no estar aún en el repo — si falta al
+  llegar a US-001, ver AGENT.md punto 3 (usar fixture temporal, dejarlo
+  anotado en notes, no bloquear el resto del build).
+
+## Iteration Log
+
+(vacío — el loop hace append aquí: US-XXX, qué se hizo, archivos tocados,
+validación)
