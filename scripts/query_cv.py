@@ -5,29 +5,25 @@ from __future__ import annotations
 import logging
 import os
 import time
-
-os.environ.setdefault("USE_TF", "0")  # avoid transformers loading TF/Keras 3 on this machine
-
 from typing import TypedDict
 
 import psycopg2
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from scripts.logging_config import setup_logging
+from scripts.retry import call_with_rate_limit_retry
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
-EMBEDDING_MODEL = os.environ.get(
-    "EMBEDDING_MODEL",
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-)
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "qwen/qwen3-embedding-0.6b")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 CV_SIMILARITY_THRESHOLD = float(os.environ.get("CV_SIMILARITY_THRESHOLD", "0.15"))
-
-_model_cache: dict = {}
 
 TOOL_SCHEMA = {
     "name": "query_cv",
@@ -60,23 +56,20 @@ class ChunkResult(TypedDict):
     similarity: float  # cosine similarity 0-1, higher = more similar
 
 
-def _load_model():
-    if EMBEDDING_MODEL not in _model_cache:
-        from sentence_transformers import SentenceTransformer
+def _embed(text: str) -> list[float]:
+    """Get an embedding vector from OpenRouter (qwen3-embedding by default)."""
 
-        start = time.perf_counter()
-        _model_cache[EMBEDDING_MODEL] = SentenceTransformer(EMBEDDING_MODEL)
-        logger.info(
-            "model_load",
-            extra={
-                "embedding_model": EMBEDDING_MODEL,
-                "cache_hit": False,
-                "latency_ms": round((time.perf_counter() - start) * 1000, 1),
-            },
+    def _call():
+        resp = requests.post(
+            f"{OPENROUTER_BASE_URL}/embeddings",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+            json={"model": EMBEDDING_MODEL, "input": text},
+            timeout=30,
         )
-    else:
-        logger.debug("model_load", extra={"embedding_model": EMBEDDING_MODEL, "cache_hit": True})
-    return _model_cache[EMBEDDING_MODEL]
+        resp.raise_for_status()
+        return resp.json()["data"][0]["embedding"]
+
+    return call_with_rate_limit_retry(_call)
 
 
 def _vec_to_pg(vec: list[float]) -> str:
@@ -89,8 +82,7 @@ def query_cv(question: str, top_k: int = 8) -> list[ChunkResult]:
     Chunks below CV_SIMILARITY_THRESHOLD (env var, default 0.3) are dropped.
     Returns [] when nothing qualifies.
     """
-    model = _load_model()
-    query_vec = _vec_to_pg(model.encode(question))
+    query_vec = _vec_to_pg(_embed(question))
 
     start = time.perf_counter()
     try:

@@ -1,4 +1,4 @@
-# Spec 07 — docker-compose local + Dockerfile + deploy Render/Supabase
+# Spec 07 — docker-compose local + Dockerfile + deploy Cloud Run/Supabase
 
 ## Objetivo
 
@@ -6,11 +6,17 @@ Contenedorizar la app para desarrollo local (2 contenedores: `db` + `app`)
 y dejar el pipeline de deploy a producción documentado y ejecutable, según
 lo definido en PRD §4/§6.
 
-**Cambio de plataforma (2026-09-12):** se reemplaza Cloud Run + Cloud SQL
-por **Render (app) + Supabase (Postgres/pgvector)** — ambos con free tier
-permanente, sin requerir billing habilitado ni tarjeta para el proyecto de
-GCP. Cero cambios al `Dockerfile`; solo cambia el destino del deploy y el
-`DATABASE_URL`. Ver "Abierto / bloqueado" por el trade-off (cold start).
+**Historial de cambios de plataforma:**
+- (2026-09-12, primer cambio) Cloud Run + Cloud SQL → **Render + Supabase**,
+  para evitar el costo de Cloud SQL (~$9 USD/mes, sin free tier).
+- (2026-09-12, segundo cambio) **Render + Supabase → Cloud Run + Supabase**.
+  Render free tier (512MB RAM) no alcanza para cargar `sentence-transformers`
+  /torch en `query_cv` — el proceso moría por OOM a media petición (502) en
+  cuanto una pregunta real disparaba el tool call (verificado en producción,
+  ver "Abierto / bloqueado"). Cloud Run permite `--memory 1Gi` sin costo
+  mientras el tráfico quede dentro del free tier (2M requests/mes); ya no
+  se usa Cloud SQL (la DB vive en Supabase), que era lo único que cobraba
+  en el plan original. Cero cambios al `Dockerfile`.
 
 ## Dependencias
 
@@ -70,51 +76,62 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 (Ajustar nombre del módulo/app real de FastAPI al implementar spec 05.)
 
-### Deploy a producción (Render + Supabase)
+### Deploy a producción (Cloud Run + Supabase)
 
-Ambos con free tier permanente (sin tarjeta / billing requerido). Repo ya
-en GitHub (`ErnestoMendieta/reto_1_banorte`), deploy conectado directo
-desde ahí.
+Repo ya en GitHub (`ErnestoMendieta/reto_1_banorte`). Requiere `gcloud` CLI
+autenticado y un proyecto de GCP con billing habilitado (para activar la
+API de Cloud Run — no implica cobro si el uso queda dentro del free tier).
 
-1. **Supabase** (Postgres + pgvector):
-   - Crear proyecto en supabase.com (free tier).
-   - En el SQL editor: `create extension if not exists vector;`.
-   - Copiar el connection string (modo "Session pooler" o directo) y
-     correr una sola vez desde local: `DATABASE_URL=<supabase_url>
-     python scripts/ingest_cv.py`.
-2. **Render** (app, Web Service):
-   - "New Web Service" → conectar el repo de GitHub → Environment:
-     Docker (usa el `Dockerfile` tal cual, sin cambios).
-   - Variables de entorno (Render → Environment, como secrets):
-     `GITHUB_TOKEN`, `GITHUB_USERNAMES`, `OPENROUTER_API_KEY`,
-     `OPENROUTER_MODEL`, `CV_TEX_PATH`, `LOG_FORMAT`, y `DATABASE_URL`
-     apuntando a Supabase.
-   - Puerto: Render detecta `EXPOSE 8080` del Dockerfile automáticamente.
-3. **Verificar**: `curl -X POST https://<servicio>.onrender.com/v1/responses
+1. **Supabase** (Postgres + pgvector) — ya provisionado:
+   - `create extension if not exists vector;` desde el SQL editor.
+   - Ingesta ya corrida una vez desde local apuntando `DATABASE_URL` a
+     Supabase: `python scripts/ingest_cv.py`.
+2. **Cloud Run** (app):
+   ```bash
+   gcloud services enable run.googleapis.com cloudbuild.googleapis.com
+   gcloud run deploy cv-agent \
+     --source . \
+     --region {region} \
+     --memory 1Gi \
+     --allow-unauthenticated \
+     --set-env-vars OPENROUTER_MODEL=google/gemini-3.6-flash,GITHUB_USERNAMES=ErnestoMendieta,ErnestoMCUpiit \
+     --set-env-vars DATABASE_URL="postgresql://postgres:{tu-password}@db.{project-ref}.supabase.co:5432/postgres" \
+     --set-env-vars OPENROUTER_API_KEY={tu-key},GITHUB_TOKEN={tu-token}
+   ```
+   `--source .` hace build (Cloud Build, usa el `Dockerfile` del repo tal
+   cual) + deploy en un solo comando — no hace falta Artifact Registry
+   manual. `--memory 1Gi` es el flag crítico: el default de Cloud Run es
+   512MB, la misma memoria que causó el OOM en Render.
+3. **Verificar**: `curl -X POST https://<servicio>.run.app/v1/responses
    -H "Content-Type: application/json" -d '{"input": "..."}'`.
 
 ## Fuera de alcance
 
-- CI/CD automatizado más allá del auto-deploy de Render on push a main.
-- Autoscaling / tuning de recursos más allá de los defaults del free tier.
-- VPC / red privada (no hay requisito de aislamiento de red).
+- CI/CD automatizado (GitHub Actions, Cloud Build triggers) — deploy
+  manual vía `gcloud run deploy` es suficiente para el reto.
+- Autoscaling tuning más allá de los defaults de Cloud Run.
+- VPC connector / red privada (no hay requisito de aislamiento de red).
 
 ## Criterios de aceptación
 
-- [ ] `docker-compose up` levanta `db` + `app`, y `curl
+- [x] `docker-compose up` levanta `db` + `app`, y `curl
       localhost:8080/v1/responses` responde correctamente (mismo criterio
       que spec 05, pero corriendo dentro de Docker).
-- [ ] La imagen de `app` se construye sin errores (`docker build .`).
-- [ ] El servicio desplegado en Render responde igual que en local contra
-      la DB de Supabase.
+- [x] La imagen de `app` se construye sin errores (`docker build .`).
+- [ ] El servicio desplegado en Cloud Run responde igual que en local
+      contra la DB de Supabase, incluyendo preguntas reales que disparan
+      `query_cv_tool` (no solo un input trivial) — esto es lo que reveló
+      el OOM en Render, hay que probarlo explícitamente, no basta un
+      smoke test superficial.
 
 ## Abierto / bloqueado
 
-- **Free tier de Render duerme el servicio tras 15 min sin tráfico**
-  (~30s de cold start al despertar). Aceptable para evaluación del reto;
-  si se necesita siempre-caliente, subir a un plan pago de Render o mover
-  a una VM Always Free de Oracle Cloud corriendo `docker-compose.yml` tal
-  cual (alternativa evaluada, descartada solo por mayor fricción de alta
-  de cuenta).
-- GCP se descartó como destino: Cloud SQL (Postgres) no cae en su free
-  tier y requiere billing habilitado.
+- **Cloud Run escala a cero sin tráfico** (default) → cold start en la
+  primera request tras inactividad, igual que pasaba en Render. Aceptable
+  para evaluación del reto; `--min-instances 1` lo evita pero deja de ser
+  gratis.
+- **Incidente registrado**: el deploy en Render (free tier, 512MB RAM)
+  causó un crash por OOM en cuanto una pregunta real invocaba
+  `query_cv_tool` (carga de `sentence-transformers`/torch) — 502 a medio
+  request, contenedor reiniciado. Ver `DEPLOY.md` para el detalle. Por
+  esto se migró a Cloud Run con `--memory 1Gi`.

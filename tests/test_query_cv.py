@@ -34,9 +34,9 @@ def _mock_conn(rows: list[tuple]) -> tuple[MagicMock, MagicMock]:
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_returns_chunk_results(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_returns_chunk_results(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     conn, _ = _mock_conn([("Experiencia Laboral", "SESESP", "Trabajé en SESESP...", 0.85)])
     mock_connect.return_value = conn
 
@@ -51,9 +51,9 @@ def test_returns_chunk_results(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_filters_below_threshold(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_filters_below_threshold(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     # similarity 0.1 is below the default threshold 0.3
     conn, _ = _mock_conn([("Encabezado", None, "Ernesto Mendieta...", 0.1)])
     mock_connect.return_value = conn
@@ -64,9 +64,9 @@ def test_filters_below_threshold(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_default_top_k_is_eight(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_default_top_k_is_eight(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     conn, cursor = _mock_conn([])
     mock_connect.return_value = conn
 
@@ -77,9 +77,9 @@ def test_default_top_k_is_eight(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_custom_top_k_is_forwarded(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_custom_top_k_is_forwarded(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     conn, cursor = _mock_conn([])
     mock_connect.return_value = conn
 
@@ -90,9 +90,9 @@ def test_custom_top_k_is_forwarded(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_entry_title_can_be_none(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_entry_title_can_be_none(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     conn, _ = _mock_conn([("Educación", None, "IPN Ingeniería en IA...", 0.75)])
     mock_connect.return_value = conn
 
@@ -102,9 +102,9 @@ def test_entry_title_can_be_none(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_multiple_results_ordered_by_similarity(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_multiple_results_ordered_by_similarity(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     rows = [
         ("Experiencia Laboral", "SESESP", "chunk A", 0.90),
         ("Proyectos", "GunGuardAI", "chunk B", 0.65),
@@ -120,9 +120,9 @@ def test_multiple_results_ordered_by_similarity(mock_load, mock_connect):
 
 
 @patch("scripts.query_cv.psycopg2.connect")
-@patch("scripts.query_cv._load_model")
-def test_empty_result_when_no_chunks(mock_load, mock_connect):
-    mock_load.return_value.encode.return_value = _FAKE_EMB
+@patch("scripts.query_cv._embed")
+def test_empty_result_when_no_chunks(mock_embed, mock_connect):
+    mock_embed.return_value = _FAKE_EMB
     conn, _ = _mock_conn([])
     mock_connect.return_value = conn
 

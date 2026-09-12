@@ -30,9 +30,10 @@ leer para saber qué sigue.
 - **Ingesta del CV (spec 01)**: la estructura exacta de macros LaTeX del
   `.tex` fuente aún no se ha inspeccionado — el parser debe ajustarse al
   archivo real una vez esté disponible en el repo.
-- **Deploy (spec 07)**: se reemplazó Cloud Run/Cloud SQL por Render +
-  Supabase (ambos free tier permanente, sin billing) — GCP quedó
-  descartado por costo. Ver `DEPLOY.md` y spec 07 actualizados.
+- **Deploy (spec 07)**: Cloud Run (app, `--memory 1Gi`) + Supabase
+  (Postgres/pgvector). Se probó Render primero pero su free tier (512MB)
+  no alcanza para `sentence-transformers`/torch en `query_cv` — OOM/502 en
+  producción. Ver `DEPLOY.md` y spec 07 para el historial completo.
 
 ## Convenciones para todas las specs
 
