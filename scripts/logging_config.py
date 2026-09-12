@@ -29,6 +29,15 @@ class ConversationIdFilter(logging.Filter):
         return True
 
 
+def _extract_extra(record: logging.LogRecord) -> dict:
+    """Campos pasados vía extra={...} en cada logger.info/warning/error(...) call."""
+    return {
+        k: v
+        for k, v in record.__dict__.items()
+        if k not in _RESERVED_RECORD_KEYS and k != "conversation_id"
+    }
+
+
 class JsonFormatter(logging.Formatter):
     """Una línea JSON por log — Cloud Logging la parsea automáticamente como jsonPayload."""
 
@@ -40,28 +49,48 @@ class JsonFormatter(logging.Formatter):
             "event": record.getMessage(),
             "conversation_id": getattr(record, "conversation_id", None),
         }
-        extra = {
-            k: v
-            for k, v in record.__dict__.items()
-            if k not in _RESERVED_RECORD_KEYS and k not in payload
-        }
-        payload.update(extra)
+        payload.update(_extract_extra(record))
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+_LEVEL_ABBREV = {"DEBUG": "DBG", "INFO": "INF", "WARNING": "WRN", "ERROR": "ERR", "CRITICAL": "CRT"}
+
+
+class ConsoleFormatter(logging.Formatter):
+    """Una línea legible para terminal local. No usar en Cloud Run (ahí queremos JSON)."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).strftime("%H:%M:%S.%f")[:-3]
+        level = _LEVEL_ABBREV.get(record.levelname, record.levelname[:3])
+        conv = getattr(record, "conversation_id", None)
+        conv_tag = f"[{conv[:8]}]" if conv else "[--------]"
+        fields = " ".join(f"{k}={v}" for k, v in _extract_extra(record).items())
+        line = f"{ts} {level} {conv_tag} {record.name:<20} {record.getMessage():<22} {fields}".rstrip()
+        if record.exc_info:
+            line += "\n" + self.formatException(record.exc_info)
+        return line
 
 
 _configured = False
 
 
 def setup_logging() -> None:
-    """Configura el root logger una sola vez. Idempotente — llamar libremente."""
+    """Configura el root logger una sola vez. Idempotente — llamar libremente.
+
+    LOG_FORMAT=console da salida legible para desarrollo local (default: json,
+    requerido para que Cloud Logging parsee los campos en producción).
+    """
     global _configured
     if _configured:
         return
 
+    fmt = os.environ.get("LOG_FORMAT", "json").lower()
+    formatter = ConsoleFormatter() if fmt in {"console", "text"} else JsonFormatter()
+
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
+    handler.setFormatter(formatter)
     handler.addFilter(ConversationIdFilter())
 
     root = logging.getLogger()
