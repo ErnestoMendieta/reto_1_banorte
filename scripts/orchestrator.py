@@ -42,7 +42,11 @@ class AgentState(TypedDict):
 
 @tool
 def query_cv_tool(question: str, top_k: int = 4) -> str:
-    """Busca información en el CV del candidato (experiencia, educación, skills, proyectos) relevante a una pregunta."""
+    """Busca información en el CV del candidato (experiencia, educación, skills, proyectos) relevante a una pregunta.
+
+    Usa vocabulario cercano al CV (nombres de empresas/instituciones, títulos de puesto,
+    tecnologías) en vez de paráfrasis genéricas — mejora mucho la recuperación. Si el primer
+    intento no trae lo que buscas, reformula con términos más específicos y vuelve a llamar."""
     results = _query_cv(question, top_k)
     return json.dumps(results, ensure_ascii=False)
 
