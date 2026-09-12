@@ -138,7 +138,7 @@
       "repeat": 1,
       "runnable_live": true,
       "source_grounding": "query_github_tool aspect=list_repos",
-      "notes": "Repos reales verificados bajo ErnestoMendieta: chatbot-musical-LSTM, Noticias-Tlaxcala-con-RAG, Rag-de-noticias-de-Tlaxcala, reto_1_banorte, ErnestoMendieta."
+      "notes": "list_repos ahora mezcla repos de todas las cuentas en GITHUB_USERNAMES (ErnestoMendieta,ErnestoMCUpiit), cada uno con su campo owner. Repos verificados bajo ErnestoMendieta: chatbot-musical-LSTM, Noticias-Tlaxcala-con-RAG, Rag-de-noticias-de-Tlaxcala, reto_1_banorte, ErnestoMendieta. La respuesta puede incluir además repos de ErnestoMCUpiit (p.ej. DeteccionArmasDeFuego) — no falla el caso, siempre que refleje lo que la tool haya devuelto."
     },
     {
       "id": "gh-002",
@@ -185,11 +185,11 @@
       "expected_keywords_any": null,
       "expected_keywords_all": null,
       "forbidden_keywords": null,
-      "expected_behavior": "Se espera repo_not_found (el repo pertenece a la cuenta ErnestoMCUpiit, no a GITHUB_USERNAME=ErnestoMendieta). El agente debe admitirlo explícitamente, nunca inventar actividad.",
+      "expected_behavior": "query_github_tool ahora soporta múltiples cuentas (GITHUB_USERNAMES=ErnestoMendieta,ErnestoMCUpiit) vía el parámetro owner. Son aceptables dos resultados: (a) el agente descubre que DeteccionArmasDeFuego pertenece a ErnestoMCUpiit (p.ej. llamando list_repos primero) y reporta actividad real, o (b) no lo descubre, la tool usa el owner por default (ErnestoMendieta) y devuelve repo_not_found, que el agente debe admitir explícitamente. Lo único que reprueba el caso es inventar commits/actividad que ninguna llamada a la tool devolvió.",
       "repeat": 1,
       "runnable_live": true,
-      "source_grounding": "CV > Proyectos > GunGuardAI (github.com/ErnestoMCUpiit/DeteccionArmasDeFuego)",
-      "notes": "Caso intencional de 'no encontrado' real, no un error del dataset — GunGuardAI y flotillaWeb están en una cuenta de GitHub distinta a la configurada."
+      "source_grounding": "CV > Proyectos > GunGuardAI (github.com/ErnestoMCUpiit/DeteccionArmasDeFuego) + query_github_tool(owner=...)",
+      "notes": "Antes de que query_github.py soportara múltiples cuentas, este repo garantizadamente daba repo_not_found (cuenta distinta a la única configurada). Con GITHUB_USERNAMES=ErnestoMendieta,ErnestoMCUpiit el resultado ya no es determinístico — depende de si el agente pasa owner correctamente. El check_type graceful_degradation + LLM-judge sobre expected_behavior está diseñado para tolerar ambos desenlaces."
     },
     {
       "id": "multi-001",

@@ -51,9 +51,10 @@ def query_cv_tool(question: str, top_k: int = 4) -> str:
 def query_github_tool(
     aspect: Literal["list_repos", "repo_overview", "languages", "readme", "activity"],
     repo_name: str | None = None,
+    owner: str | None = None,
 ) -> str:
-    """Consulta los repositorios públicos de GitHub del candidato: lista de repos, lenguajes, README o actividad reciente."""
-    result = _query_github(aspect, repo_name)
+    """Consulta los repositorios públicos de GitHub del candidato (puede tener repos en más de una cuenta): lista de repos, lenguajes, README o actividad reciente."""
+    result = _query_github(aspect, repo_name, owner)
     return json.dumps(result, ensure_ascii=False)
 
 

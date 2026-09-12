@@ -19,7 +19,9 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
-GITHUB_USERNAME = os.environ["GITHUB_USERNAME"]
+GITHUB_USERNAMES: list[str] = [
+    u.strip() for u in os.environ["GITHUB_USERNAMES"].split(",") if u.strip()
+]
 GITHUB_API_BASE = "https://api.github.com"
 
 # Optional: comma-separated allowlist (e.g. ALLOWED_REPOS=repo-a,repo-b).
@@ -32,7 +34,8 @@ ALLOWED_REPOS: set[str] = (
 TOOL_SCHEMA = {
     "name": "query_github",
     "description": (
-        "Consulta los repositorios públicos de GitHub del candidato: lista de repos, "
+        "Consulta los repositorios públicos de GitHub del candidato, que puede tener "
+        "repos repartidos en más de una cuenta: lista de repos (con su owner), "
         "detalle de un repo, lenguajes usados, contenido del README, o actividad "
         "reciente (commits)."
     ),
@@ -49,6 +52,14 @@ TOOL_SCHEMA = {
                 "description": (
                     "Nombre del repo (sin owner). Requerido para todo aspecto "
                     "excepto 'list_repos'."
+                ),
+            },
+            "owner": {
+                "type": "string",
+                "description": (
+                    "Cuenta de GitHub dueña del repo. Tómalo del campo 'owner' que "
+                    "devuelve list_repos para ese repo. Si se omite, se usa la cuenta "
+                    "principal del candidato."
                 ),
             },
         },
@@ -83,19 +94,21 @@ def _is_rate_limited(response: requests.Response) -> bool:
         return False
 
 
-def query_github(aspect: str, repo_name: str | None = None) -> GithubResult:
+def query_github(aspect: str, repo_name: str | None = None, owner: str | None = None) -> GithubResult:
     """Query GitHub REST API v3 for the candidate's public repos.
 
     Never raises uncaught exceptions — all errors are returned as GithubResult.
     Thin logging wrapper around _query_github_impl; see that function for the actual logic.
     """
-    logger.debug("query_github_start", extra={"aspect": aspect, "repo_name": repo_name})
+    logger.debug(
+        "query_github_start", extra={"aspect": aspect, "repo_name": repo_name, "owner": owner}
+    )
     start = time.perf_counter()
-    result = _query_github_impl(aspect, repo_name)
+    result = _query_github_impl(aspect, repo_name, owner)
     latency_ms = round((time.perf_counter() - start) * 1000, 1)
 
     error = result["error"] or ""
-    common = {"aspect": aspect, "repo_name": repo_name, "latency_ms": latency_ms}
+    common = {"aspect": aspect, "repo_name": repo_name, "owner": owner, "latency_ms": latency_ms}
     if error == "rate_limited":
         logger.warning("query_github_rate_limited", extra=common)
     elif error.startswith("network_error"):
@@ -109,13 +122,49 @@ def query_github(aspect: str, repo_name: str | None = None) -> GithubResult:
     return result
 
 
-def _query_github_impl(aspect: str, repo_name: str | None = None) -> GithubResult:
+def _list_repos_all_accounts() -> GithubResult:
+    """Fetch and merge public repos across every account in GITHUB_USERNAMES.
+
+    Fails fast on the first account that errors out — consistent with the
+    single-request error handling used for every other aspect.
+    """
+    all_repos: list[dict] = []
+    for user in GITHUB_USERNAMES:
+        try:
+            response = _session().get(f"{GITHUB_API_BASE}/users/{user}/repos", timeout=10)
+        except requests.RequestException as exc:
+            return GithubResult(ok=False, data=None, error=f"network_error: {exc}")
+
+        if response.status_code == 403 or _is_rate_limited(response):
+            return GithubResult(ok=False, data=None, error="rate_limited")
+
+        if not response.ok:
+            return GithubResult(ok=False, data=None, error=f"github_error_{response.status_code}")
+
+        for r in response.json():
+            if ALLOWED_REPOS and r["name"] not in ALLOWED_REPOS:
+                continue
+            all_repos.append(
+                {
+                    "owner": user,
+                    "name": r["name"],
+                    "description": r.get("description"),
+                    "stars": r.get("stargazers_count", 0),
+                    "language": r.get("language"),
+                    "updated_at": r.get("updated_at"),
+                }
+            )
+    return GithubResult(ok=True, data=all_repos, error=None)
+
+
+def _query_github_impl(
+    aspect: str, repo_name: str | None = None, owner: str | None = None
+) -> GithubResult:
     """Query GitHub REST API v3 for the candidate's public repos.
 
     Never raises uncaught exceptions — all errors are returned as GithubResult.
     """
     base = GITHUB_API_BASE
-    user = GITHUB_USERNAME
 
     if aspect != "list_repos" and not repo_name:
         return GithubResult(ok=False, data=None, error="repo_name_required")
@@ -123,8 +172,11 @@ def _query_github_impl(aspect: str, repo_name: str | None = None) -> GithubResul
     if repo_name and ALLOWED_REPOS and repo_name not in ALLOWED_REPOS:
         return GithubResult(ok=False, data=None, error="repo_not_allowed")
 
+    if aspect == "list_repos":
+        return _list_repos_all_accounts()
+
+    user = owner or GITHUB_USERNAMES[0]
     url_map: dict[str, str] = {
-        "list_repos": f"{base}/users/{user}/repos",
         "repo_overview": f"{base}/repos/{user}/{repo_name}",
         "languages": f"{base}/repos/{user}/{repo_name}/languages",
         "readme": f"{base}/repos/{user}/{repo_name}/readme",
@@ -154,22 +206,6 @@ def _query_github_impl(aspect: str, repo_name: str | None = None) -> GithubResul
         raw_b64 = payload.get("content", "").replace("\n", "")
         text = base64.b64decode(raw_b64).decode("utf-8", errors="replace")
         return GithubResult(ok=True, data={"name": payload.get("name", ""), "content": text}, error=None)
-
-    if aspect == "list_repos":
-        repos = payload
-        if ALLOWED_REPOS:
-            repos = [r for r in repos if r["name"] in ALLOWED_REPOS]
-        normalized = [
-            {
-                "name": r["name"],
-                "description": r.get("description"),
-                "stars": r.get("stargazers_count", 0),
-                "language": r.get("language"),
-                "updated_at": r.get("updated_at"),
-            }
-            for r in repos
-        ]
-        return GithubResult(ok=True, data=normalized, error=None)
 
     if aspect == "repo_overview":
         normalized = {

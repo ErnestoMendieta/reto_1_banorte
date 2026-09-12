@@ -65,7 +65,38 @@ def test_list_repos_normalizes_expected_fields(mock_session):
 
     result = query_github("list_repos")
 
-    assert set(result["data"][0].keys()) == {"name", "description", "stars", "language", "updated_at"}
+    assert set(result["data"][0].keys()) == {
+        "owner",
+        "name",
+        "description",
+        "stars",
+        "language",
+        "updated_at",
+    }
+
+
+@patch("scripts.query_github._session")
+@patch("scripts.query_github.GITHUB_USERNAMES", ["userA", "userB"])
+def test_list_repos_merges_multiple_accounts_and_tags_owner(mock_session):
+    resp_a = _resp(
+        200,
+        [{"name": "repo-a", "description": None, "stargazers_count": 1, "language": "Python", "updated_at": None}],
+    )
+    resp_b = _resp(
+        200,
+        [{"name": "repo-b", "description": None, "stargazers_count": 2, "language": "Go", "updated_at": None}],
+    )
+    session = MagicMock()
+    session.get.side_effect = [resp_a, resp_b]
+    mock_session.return_value = session
+
+    from scripts.query_github import query_github
+
+    result = query_github("list_repos")
+
+    assert result["ok"] is True
+    assert {r["owner"] for r in result["data"]} == {"userA", "userB"}
+    assert {r["name"] for r in result["data"]} == {"repo-a", "repo-b"}
 
 
 # ── readme ────────────────────────────────────────────────────────────────────
@@ -169,6 +200,43 @@ def test_missing_repo_name_returns_error(mock_session):
     mock_session.assert_not_called()
 
 
+# ── owner param ───────────────────────────────────────────────────────────────
+
+
+@patch("scripts.query_github._session")
+def test_repo_overview_uses_specified_owner(mock_session):
+    session = MagicMock()
+    session.get.return_value = _resp(
+        200,
+        {"name": "r", "stargazers_count": 0, "forks_count": 0, "language": None, "topics": [], "updated_at": None},
+    )
+    mock_session.return_value = session
+
+    from scripts.query_github import query_github
+
+    query_github("repo_overview", repo_name="r", owner="someone-else")
+
+    called_url = session.get.call_args[0][0]
+    assert "someone-else/r" in called_url
+
+
+@patch("scripts.query_github._session")
+def test_repo_overview_defaults_to_primary_owner_when_omitted(mock_session):
+    session = MagicMock()
+    session.get.return_value = _resp(
+        200,
+        {"name": "r", "stargazers_count": 0, "forks_count": 0, "language": None, "topics": [], "updated_at": None},
+    )
+    mock_session.return_value = session
+
+    from scripts.query_github import GITHUB_USERNAMES, query_github
+
+    query_github("repo_overview", repo_name="r")
+
+    called_url = session.get.call_args[0][0]
+    assert f"{GITHUB_USERNAMES[0]}/r" in called_url
+
+
 # ── network error ─────────────────────────────────────────────────────────────
 
 
@@ -193,12 +261,13 @@ def _github_available() -> bool:
     import os
 
     token = os.environ.get("GITHUB_TOKEN", "")
-    username = os.environ.get("GITHUB_USERNAME", "")
-    if not token or not username:
+    usernames = os.environ.get("GITHUB_USERNAMES", "")
+    if not token or not usernames:
         return False
     try:
         import requests as req
 
+        username = usernames.split(",")[0].strip()
         r = req.get(
             f"https://api.github.com/users/{username}",
             headers={"Authorization": f"Bearer {token}"},
