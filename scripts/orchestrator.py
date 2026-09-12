@@ -20,6 +20,7 @@ load_dotenv()
 from scripts.logging_config import setup_logging
 from scripts.query_cv import query_cv as _query_cv
 from scripts.query_github import query_github as _query_github
+from scripts.retry import call_with_rate_limit_retry
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -78,7 +79,12 @@ def _build_llm():
 def _agent_node(state: AgentState, llm) -> dict:
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state["messages"])
     start = time.perf_counter()
-    response = llm.invoke(messages)
+    response = call_with_rate_limit_retry(
+        lambda: llm.invoke(messages),
+        on_retry=lambda attempt, delay: logger.warning(
+            "rate_limit_retry", extra={"attempt": attempt, "delay_s": delay}
+        ),
+    )
     tool_calls = getattr(response, "tool_calls", None) or []
     logger.info(
         "llm_call_end",

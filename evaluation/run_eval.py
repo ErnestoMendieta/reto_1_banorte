@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import time
 import unicodedata
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
@@ -47,6 +46,7 @@ from scripts.orchestrator import (
     run_agent,
 )
 from scripts.query_github import GithubResult
+from scripts.retry import call_with_rate_limit_retry
 
 DATASET_PATH = Path(__file__).parent / "dataset.json"
 RESULTS_DIR = Path(__file__).parent / "results"
@@ -54,35 +54,14 @@ RESULTS_DIR = Path(__file__).parent / "results"
 _JUDGE_CHECK_TYPES = {"refusal", "adversarial_guardrail", "graceful_degradation"}
 _MAX_EVIDENCE_CHARS = 2000
 
-_RATE_LIMIT_MAX_RETRIES = 5
-_RATE_LIMIT_BASE_DELAY_S = 8.0
 
+def _retry_on_rate_limit(fn):
+    """Wrapper del retry compartido con los parámetros pacientes de un runner batch (no live)."""
 
-def _is_rate_limit_error(exc: Exception) -> bool:
-    msg = str(exc)
-    return "429" in msg or "rate limit" in msg.lower() or "RateLimit" in type(exc).__name__
+    def _report(attempt: int, delay: float) -> None:
+        print(f"    [rate limit] reintentando en {delay:.0f}s (intento {attempt}/5)...", flush=True)
 
-
-def _call_with_rate_limit_retry(fn):
-    """Llama fn() reintentando con backoff exponencial ante errores 429/rate-limit.
-
-    Cualquier otra excepción se propaga de inmediato (no es un problema de cuota,
-    no tiene sentido esperar y reintentar).
-    """
-    delay = _RATE_LIMIT_BASE_DELAY_S
-    for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
-        try:
-            return fn()
-        except Exception as exc:
-            if not _is_rate_limit_error(exc) or attempt == _RATE_LIMIT_MAX_RETRIES:
-                raise
-            print(
-                f"    [rate limit] reintentando en {delay:.0f}s "
-                f"(intento {attempt + 1}/{_RATE_LIMIT_MAX_RETRIES})...",
-                flush=True,
-            )
-            time.sleep(delay)
-            delay = min(delay * 2, 60.0)
+    return call_with_rate_limit_retry(fn, max_retries=5, base_delay=8.0, max_delay=60.0, on_retry=_report)
 
 MOCK_REGISTRY: dict[str, GithubResult] = {
     "adv-003": GithubResult(
@@ -228,7 +207,7 @@ def judge_case(
         if attempt == 1:
             user += "\n\nTu respuesta anterior no era JSON válido. Responde SOLO el objeto JSON."
         messages = [SystemMessage(content=_JUDGE_SYSTEM), HumanMessage(content=user)]
-        raw = _call_with_rate_limit_retry(lambda messages=messages: llm.invoke(messages).content)
+        raw = _retry_on_rate_limit(lambda messages=messages: llm.invoke(messages).content)
         parsed = _try_parse_json(raw)
         if parsed and parsed.get("verdict") in {"PASS", "FAIL"}:
             return {"verdict": parsed["verdict"], "reason": parsed.get("reason", ""), "raw": raw}
@@ -246,7 +225,7 @@ def _run_case_turns(case: dict) -> tuple[list[tuple[str, dict]], str, list[tuple
         human_msg = HumanMessage(content=turn["content"])
         prior_len = len(state["messages"]) if state else 0
         prior_state = state
-        state = _call_with_rate_limit_retry(
+        state = _retry_on_rate_limit(
             lambda human_msg=human_msg, prior_state=prior_state: run_agent([human_msg], state=prior_state)
         )
         new_messages = state["messages"][prior_len + 1 :]
