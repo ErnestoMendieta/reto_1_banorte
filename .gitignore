@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# evaluation runner output (timestamped run artifacts, not source)
+evaluation/results/

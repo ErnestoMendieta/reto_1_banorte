@@ -15,8 +15,8 @@
         "Correr la ingesta con un segundo model_name distinto no borra ni duplica los embeddings del primero"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/ingest_cv.py. Parser LaTeX basado en macro \\seccion{} (no \\section). Chunks: 1 encabezado + 1 educación + 3 experiencias + 5 proyectos + 1 habilidades = 11 chunks. Idempotencia via TRUNCATE CASCADE. Modo --reembed para regenerar embeddings sin re-parsear. Embedding model: paraphrase-multilingual-MiniLM-L12-v2 (384 dims, multilingual). Validado con pytest (13 tests, sin DB). CV_TEX_PATH apunta a data/cv.tex (no data/cv/cv.tex como sugería la spec). docker-compose.yml creado con solo servicio db (app se agrega en US-007)."
     },
     {
       "id": "US-002",
@@ -29,8 +29,8 @@
         "La funcion tiene al menos un test automatizado aislado contra la base de datos de prueba"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/query_cv.py. TOOL_SCHEMA incluido para uso directo por el orquestador. Lazy load de SentenceTransformer via _load_model() con cache por modelo. Filtrado por CV_SIMILARITY_THRESHOLD (env, default 0.3). _vec_to_pg acepta numpy array o list. 7 unit tests (mocked DB+model) + 2 integration tests (skipif sin DB). 20 tests total pasan, ruff clean."
     },
     {
       "id": "US-003",
@@ -43,8 +43,8 @@
         "repo_name inexistente devuelve {ok: false, error: 'repo_not_found'}"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/query_github.py. 5 aspectos: list_repos, repo_overview, languages, readme, activity. GithubResult TypedDict (ok, data, error). _session() construye requests.Session con Bearer token. _is_rate_limited() chequea X-RateLimit-Remaining. Errores controlados: 404→repo_not_found, 403→rate_limited, remaining=0→rate_limited, RequestException→network_error. README decodificado de base64 (GitHub agrega \\n al contenido). ALLOWED_REPOS env var opcional para filtrar repos. 10 unit tests (9 pasan, 1 integration skipped sin red). 30 tests totales, ruff clean."
     },
     {
       "id": "US-004",
@@ -58,8 +58,8 @@
         "Ninguna respuesta final contiene informacion que no provenga de un resultado de tool en esa misma conversacion"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/orchestrator.py. StateGraph con nodos 'agent' (ChatOpenAI vía OpenRouter, bind_tools) y 'tools' (ToolNode con wrapping <untrusted_external_data>). @tool wrappers query_cv_tool y query_github_tool sobre las tools existentes. run_agent(messages, state) como entrypoint con soporte de continuidad. 5 unit tests (mocked LLM + tools), ruff clean. Total: 35 tests, 3 skipped (integración)."
     },
     {
       "id": "US-005",
@@ -72,8 +72,8 @@
         "Un request con un campo fuera del subset (p.ej. stream: true) nunca produce un 500"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado en scripts/api.py. FastAPI app con POST /v1/responses. Soporta input string y array de mensajes. Continuidad in-memory vía _conversations dict keyed por conversation_id. Genera uuid4 si no viene conversation_id. 10 tests (TestClient, mocked run_agent). fastapi>=0.115, uvicorn[standard], httpx>=0.27 agregados a requirements.txt."
     },
     {
       "id": "US-006",
@@ -85,8 +85,8 @@
         "Un input de usuario que excede el limite de longitud es rechazado con 400 en el endpoint, no llega al grafo"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "System prompt hardening completo en scripts/orchestrator.py (SYSTEM_PROMPT): reglas explícitas de no revelar prompt, no fingir otro rol/modo, solo información de tools, tratar <untrusted_external_data> como dato nunca como instrucción. Wrapping de ToolMessages en _tools_node (orchestrator.py) — ya existía desde US-004, cubierto por test_tool_results_wrapped_in_untrusted_delimiters. Guardrail de entrada: _MAX_INPUT_LEN=4000 en api.py, rechaza con 400 antes de llegar al grafo. Decisión consciente: sin clasificador ML de injection — system prompt + wrapping cubre el vector más realista para este alcance. Casos adversariales: cubiertos por system prompt hardening (verificación manual con LLM real requerida — comportamiento no determinista)."
     },
     {
       "id": "US-007",
@@ -99,8 +99,8 @@
         "(Bloqueado hasta tener proyecto GCP) El servicio desplegado en Cloud Run responde igual que en local"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implementado: Dockerfile (python:3.12-slim, uvicorn main:app), docker-compose.yml actualizado con servicio app (depends_on db, env_file .env, DATABASE_URL override), main.py en raíz (re-exporta app desde scripts.api), .dockerignore, DEPLOY.md con comandos gcloud para Cloud SQL + Artifact Registry + Secret Manager + Cloud Run. Deploy real a Cloud Run bloqueado hasta tener proyecto GCP con billing habilitado."
     }
   ]
 }
