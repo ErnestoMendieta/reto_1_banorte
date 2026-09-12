@@ -30,9 +30,9 @@ leer para saber qué sigue.
 - **Ingesta del CV (spec 01)**: la estructura exacta de macros LaTeX del
   `.tex` fuente aún no se ha inspeccionado — el parser debe ajustarse al
   archivo real una vez esté disponible en el repo.
-- **Deploy a Cloud Run (spec 07)**: no hay proyecto de GCP creado todavía.
-  El código/scripts de deploy se escriben igual, pero la ejecución real
-  (`gcloud run deploy`) queda bloqueada hasta que exista el proyecto.
+- **Deploy (spec 07)**: se reemplazó Cloud Run/Cloud SQL por Render +
+  Supabase (ambos free tier permanente, sin billing) — GCP quedó
+  descartado por costo. Ver `DEPLOY.md` y spec 07 actualizados.
 
 ## Convenciones para todas las specs
 

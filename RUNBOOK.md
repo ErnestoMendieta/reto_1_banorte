@@ -110,7 +110,7 @@ específica end-to-end:
 docker-compose logs app | grep '"conversation_id": "abc123'
 
 # console: el tag [abc12345] son los primeros 8 caracteres del uuid
-docker-compose logs app | grep '\[abc12345\]'
+docker-compose logs app | Select-String '\[abc12345\]'
 ```
 
 ### Eventos a buscar

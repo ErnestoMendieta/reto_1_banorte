@@ -1,10 +1,16 @@
-# Spec 07 — docker-compose local + Dockerfile + deploy Cloud Run/Cloud SQL
+# Spec 07 — docker-compose local + Dockerfile + deploy Render/Supabase
 
 ## Objetivo
 
 Contenedorizar la app para desarrollo local (2 contenedores: `db` + `app`)
-y dejar el pipeline de deploy a producción documentado y ejecutable
-(Cloud Run + Cloud SQL), según lo definido en PRD §4/§6.
+y dejar el pipeline de deploy a producción documentado y ejecutable, según
+lo definido en PRD §4/§6.
+
+**Cambio de plataforma (2026-09-12):** se reemplaza Cloud Run + Cloud SQL
+por **Render (app) + Supabase (Postgres/pgvector)** — ambos con free tier
+permanente, sin requerir billing habilitado ni tarjeta para el proyecto de
+GCP. Cero cambios al `Dockerfile`; solo cambia el destino del deploy y el
+`DATABASE_URL`. Ver "Abierto / bloqueado" por el trade-off (cold start).
 
 ## Dependencias
 
@@ -64,40 +70,34 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 (Ajustar nombre del módulo/app real de FastAPI al implementar spec 05.)
 
-### Deploy a producción (Cloud Run + Cloud SQL)
+### Deploy a producción (Render + Supabase)
 
-Pasos documentados (a ejecutar una vez exista el proyecto de GCP — ver
-"Abierto / bloqueado"):
+Ambos con free tier permanente (sin tarjeta / billing requerido). Repo ya
+en GitHub (`ErnestoMendieta/reto_1_banorte`), deploy conectado directo
+desde ahí.
 
-1. **Cloud SQL**: crear instancia de Postgres, habilitar la extensión
-   `vector` (Cloud SQL soporta pgvector desde consola/flag), crear la DB y
-   correr el schema de spec 01 + `scripts/ingest_cv.py` apuntando a esa
-   instancia (vía Cloud SQL Auth Proxy desde local, una sola vez).
-2. **Artifact Registry**: `gcloud builds submit --tag
-   {region}-docker.pkg.dev/{project}/{repo}/cv-agent`.
-3. **Secret Manager**: crear secretos `github-token`, `openrouter-api-key`,
-   `database-url` (este último apuntando a Cloud SQL vía socket unix
-   `/cloudsql/{instance_connection_name}`).
-4. **Deploy**:
-   ```
-   gcloud run deploy cv-agent \
-     --image {region}-docker.pkg.dev/{project}/{repo}/cv-agent \
-     --add-cloudsql-instances {instance_connection_name} \
-     --set-secrets=GITHUB_TOKEN=github-token:latest,OPENROUTER_API_KEY=openrouter-api-key:latest,DATABASE_URL=database-url:latest \
-     --region {region} \
-     --allow-unauthenticated
-   ```
-   (`--allow-unauthenticated` porque el reto pide un endpoint accesible
-   por un cliente compatible con Open Responses, sin auth multi-usuario —
-   ver PRD, fuera de alcance la autenticación.)
+1. **Supabase** (Postgres + pgvector):
+   - Crear proyecto en supabase.com (free tier).
+   - En el SQL editor: `create extension if not exists vector;`.
+   - Copiar el connection string (modo "Session pooler" o directo) y
+     correr una sola vez desde local: `DATABASE_URL=<supabase_url>
+     python scripts/ingest_cv.py`.
+2. **Render** (app, Web Service):
+   - "New Web Service" → conectar el repo de GitHub → Environment:
+     Docker (usa el `Dockerfile` tal cual, sin cambios).
+   - Variables de entorno (Render → Environment, como secrets):
+     `GITHUB_TOKEN`, `GITHUB_USERNAMES`, `OPENROUTER_API_KEY`,
+     `OPENROUTER_MODEL`, `CV_TEX_PATH`, `LOG_FORMAT`, y `DATABASE_URL`
+     apuntando a Supabase.
+   - Puerto: Render detecta `EXPOSE 8080` del Dockerfile automáticamente.
+3. **Verificar**: `curl -X POST https://<servicio>.onrender.com/v1/responses
+   -H "Content-Type: application/json" -d '{"input": "..."}'`.
 
 ## Fuera de alcance
 
-- CI/CD automatizado (GitHub Actions, Cloud Build triggers) — deploy
-  manual vía `gcloud` es suficiente para el reto.
-- Autoscaling tuning más allá de los defaults de Cloud Run.
-- VPC connector / red privada (no hay requisito de aislamiento de red para
-  este alcance).
+- CI/CD automatizado más allá del auto-deploy de Render on push a main.
+- Autoscaling / tuning de recursos más allá de los defaults del free tier.
+- VPC / red privada (no hay requisito de aislamiento de red).
 
 ## Criterios de aceptación
 
@@ -105,16 +105,16 @@ Pasos documentados (a ejecutar una vez exista el proyecto de GCP — ver
       localhost:8080/v1/responses` responde correctamente (mismo criterio
       que spec 05, pero corriendo dentro de Docker).
 - [ ] La imagen de `app` se construye sin errores (`docker build .`).
-- [ ] Los comandos `gcloud` de esta spec están documentados en un
-      `DEPLOY.md` en la raíz del repo, listos para ejecutarse tal cual
-      cuando exista el proyecto de GCP.
-- [ ] (Bloqueado hasta tener proyecto GCP) El servicio desplegado en Cloud
-      Run responde igual que en local — verificación real pendiente.
+- [ ] El servicio desplegado en Render responde igual que en local contra
+      la DB de Supabase.
 
 ## Abierto / bloqueado
 
-- **No hay proyecto de GCP creado todavía.** El código, `Dockerfile`,
-  `docker-compose.yml` y los comandos de deploy se escriben y prueban
-  igual (local funciona sin GCP); el paso 3-4 (deploy real) queda
-  bloqueado hasta que el usuario cree el proyecto y habilite billing.
-  Esto no bloquea cerrar el resto de esta spec.
+- **Free tier de Render duerme el servicio tras 15 min sin tráfico**
+  (~30s de cold start al despertar). Aceptable para evaluación del reto;
+  si se necesita siempre-caliente, subir a un plan pago de Render o mover
+  a una VM Always Free de Oracle Cloud corriendo `docker-compose.yml` tal
+  cual (alternativa evaluada, descartada solo por mayor fricción de alta
+  de cuenta).
+- GCP se descartó como destino: Cloud SQL (Postgres) no cae en su free
+  tier y requiere billing habilitado.
