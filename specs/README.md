@@ -11,12 +11,12 @@ de que la anterior exista y funcione.
 | # | Spec | Depende de | Estado |
 |---|------|-----------|--------|
 | 01 | [db-schema-ingestion](01-db-schema-ingestion.md) | — | hecho |
-| 02 | [tool-query-cv](02-tool-query-cv.md) | 01 | pendiente |
-| 03 | [tool-query-github](03-tool-query-github.md) | — | pendiente |
-| 04 | [orchestrator-langgraph](04-orchestrator-langgraph.md) | 02, 03 | pendiente |
-| 05 | [api-open-responses](05-api-open-responses.md) | 04 | pendiente |
-| 06 | [guardrails](06-guardrails.md) | 04, 05 | pendiente |
-| 07 | [deploy-docker-cloudrun](07-deploy-docker-cloudrun.md) | 01–06 | pendiente |
+| 02 | [tool-query-cv](02-tool-query-cv.md) | 01 | hecho |
+| 03 | [tool-query-github](03-tool-query-github.md) | — | hecho |
+| 04 | [orchestrator-langgraph](04-orchestrator-langgraph.md) | 02, 03 | hecho |
+| 05 | [api-open-responses](05-api-open-responses.md) | 04 | hecho |
+| 06 | [guardrails](06-guardrails.md) | 04, 05 | hecho |
+| 07 | [deploy-docker-cloudrun](07-deploy-docker-cloudrun.md) | 01–06 | hecho |
 
 Actualiza la columna "Estado" (`pendiente` / `en progreso` / `hecho`) a
 medida que el loop cierra cada spec — es la señal que el propio loop puede

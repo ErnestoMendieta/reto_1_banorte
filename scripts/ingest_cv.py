@@ -10,6 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+
+os.environ.setdefault("USE_TF", "0")  # avoid transformers loading TF/Keras 3 on this machine
+
 import re
 import sys
 from pathlib import Path

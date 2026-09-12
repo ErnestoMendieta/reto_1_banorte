@@ -8,7 +8,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
+
+  app:
+    build: .
+    depends_on:
+      - db
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://cvagent:cvagent@db:5432/cvagent
+    ports:
+      - "8080:8080"
 
 volumes:
   pgdata:

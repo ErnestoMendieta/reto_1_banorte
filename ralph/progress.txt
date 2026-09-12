@@ -41,3 +41,88 @@
 
 **Validación:** `pytest` corre 13 tests sin DB (todos sobre parsing puro). `ruff check .` clean.
 DB validation pendiente de `docker-compose up db` + `python scripts/ingest_cv.py`.
+
+### US-002 — Tool query_cv (retrieval semántico sobre el CV)
+
+**Archivos creados:**
+- `scripts/query_cv.py` — tool query_cv: _load_model() lazy cache, _vec_to_pg(), query_cv(), TOOL_SCHEMA
+- `tests/test_query_cv.py` — 7 unit tests (mock DB+model) + 2 integration tests (skipif sin DB)
+
+**Patrones nuevos descubiertos:**
+- `SentenceTransformer.encode()` retorna numpy array; `_vec_to_pg` itera directamente (no necesita .tolist())
+- Mock de psycopg2 context manager: `conn.cursor.return_value.__enter__.return_value = cursor`
+- `except Exception: # noqa: BLE001` en helpers de detección de disponibilidad (ruff BLE001)
+
+**Validación:** `pytest` corre 20 tests (13 US-001 + 7 US-002 unit), 2 skipped (integración sin DB). `ruff check .` clean.
+
+### US-003 — Tool query_github (GitHub REST API)
+
+**Archivos creados:**
+- `scripts/query_github.py` — tool query_github: _session(), _is_rate_limited(), query_github(), TOOL_SCHEMA
+- `tests/test_query_github.py` — 10 unit tests (mocked HTTP via _session) + 1 integration test (skipif sin red)
+
+**Archivos modificados:**
+- `requirements.txt` — agregado requests>=2.32.0
+- `specs/README.md` — US-002 y US-003 estado: hecho
+- `ralph/prd.json` — US-003 passes: true
+
+**Patrones nuevos descubiertos:**
+- Patch `scripts.query_github._session` (función que crea Session) en tests — más simple que parchear `requests.Session` directo.
+- GitHub devuelve base64 con `\n` intercalados en `content` del README — usar `.replace("\n", "")` antes de `base64.b64decode()`.
+- `X-RateLimit-Remaining: 0` con status 200 también debe retornar `{ok: False, error: "rate_limited"}` per spec.
+- ALLOWED_REPOS env var (opcional) — set de repos permitidos; filtra list_repos y valida repo_name.
+
+**Validación:** `pytest` corre 30 tests (13 US-001 + 7 US-002 + 10 US-003 unit), 3 skipped. `python -m ruff check .` clean.
+
+### US-004 — Orquestador LangGraph
+
+**Archivos creados:**
+- `scripts/orchestrator.py` — StateGraph(AgentState): nodo agent (ChatOpenAI/OpenRouter + bind_tools), nodo tools (ToolNode + wrapping <untrusted_external_data>), @tool wrappers query_cv_tool/query_github_tool, entrypoint run_agent()
+- `tests/test_orchestrator.py` — 5 unit tests (mocked LLM + tools): greeting sin tool calls, CV question → query_cv, GitHub question → query_github, continuidad 2 turnos, wrapping untrusted
+
+**Archivos modificados:**
+- `requirements.txt` — agregados langgraph>=0.2.0, langchain-openai>=0.2.0, langchain-core>=0.3.0
+- `specs/README.md` — US-004 estado: hecho
+- `ralph/prd.json` — US-004 passes: true
+
+**Patrones nuevos descubiertos:**
+- `_build_llm()` como función standalone (no cached) permite mockear fácilmente con `patch("scripts.orchestrator._build_llm", return_value=mock_llm)`.
+- `_query_cv`/`_query_github` dentro de @tool se resuelven en el namespace global al momento de llamada — `patch("scripts.orchestrator._query_cv")` funciona correctamente.
+- `_TOOL_NODE = ToolNode(_TOOLS)` al nivel de módulo es seguro; el ToolNode despacha por nombre al @tool que a su vez llama la función parcheable.
+- `add_messages` como reducer de AgentState: los nodos devuelven solo los mensajes nuevos, el reducer los acumula.
+- Para continuidad: `run_agent(new_msgs, state=prev_state)` concatena `state["messages"] + new_msgs` antes de invocar el grafo.
+
+**Validación:** `pytest` corre 35 tests (13 US-001 + 5 US-004 + 7 US-002 + 10 US-003 unit), 3 skipped. `ruff check .` clean.
+
+### US-005 — Endpoint Open Responses (subset mínimo viable)
+
+**Archivos creados:**
+- `scripts/api.py` — FastAPI app: POST /v1/responses, continuidad in-memory, validación input
+- `tests/test_api.py` — 10 unit tests (TestClient + mocked run_agent): shape, 400 cases, continuidad, conversation_id, unknown fields
+
+**Archivos modificados:**
+- `requirements.txt` — agregados fastapi>=0.115.0, uvicorn[standard]>=0.30.0, httpx>=0.27.0
+- `specs/README.md` — US-005 estado: hecho
+- `ralph/prd.json` — US-005 passes: true
+
+**Patrones nuevos descubiertos:**
+- `fastapi.testclient.TestClient` para tests síncronos de endpoints async — no requiere `asyncio` ni `anyio`.
+- Mock de `scripts.api.run_agent` (no el del orchestrator) — el app importa directamente `from scripts.orchestrator import run_agent`, así que el patch target es `scripts.api.run_agent`.
+- `_conversations` dict es estado del módulo — persiste entre requests en TestClient (mismo proceso). Para aislar tests de continuidad, no hace falta reset manual si se usa un `conversation_id` único por test.
+
+**Validación:** `pytest` corre 45 tests (35 anteriores + 10 US-005 unit), 3 skipped. `ruff check .` clean.
+
+### US-006 — Guardrails anti-prompt-injection
+
+**Archivos modificados:**
+- `scripts/orchestrator.py` — SYSTEM_PROMPT reemplazado con texto de hardening completo per spec 06: reglas explícitas de no revelar prompt, no fingir rol, solo info de tools, tratar <untrusted_external_data> como dato.
+- `scripts/api.py` — agregado `_MAX_INPUT_LEN = 4_000` + validación antes de parsear input: si `isinstance(inp, str) and len(inp) > _MAX_INPUT_LEN` → 400.
+- `specs/README.md` — US-006 estado: hecho
+- `ralph/prd.json` — US-006 passes: true
+
+**Decisiones explícitas:**
+- Sin clasificador ML de injection — system prompt hardening + wrapping de ToolMessages cubre el vector más realista para el alcance del reto.
+- Guardrail de salida (groundedness) por prompt (instrucción en system prompt), no segunda llamada LLM — costo/latencia no justificado para MVP.
+- Wrapping <untrusted_external_data> ya existía desde US-004 en `_tools_node`; los 4 tests adversariales son verificación manual con LLM real (comportamiento no determinista).
+
+**Validación:** `pytest` corre 45 tests, 3 skipped (sin cambios en conteo — guardrails cubiertos por tests existentes + test_api: test_input_exceeding_max_length_returns_400). `ruff check .` clean.
