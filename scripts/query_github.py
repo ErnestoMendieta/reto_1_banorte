@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
+import time
 from typing import TypedDict
 
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from scripts.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 GITHUB_USERNAME = os.environ["GITHUB_USERNAME"]
@@ -77,6 +84,32 @@ def _is_rate_limited(response: requests.Response) -> bool:
 
 
 def query_github(aspect: str, repo_name: str | None = None) -> GithubResult:
+    """Query GitHub REST API v3 for the candidate's public repos.
+
+    Never raises uncaught exceptions — all errors are returned as GithubResult.
+    Thin logging wrapper around _query_github_impl; see that function for the actual logic.
+    """
+    logger.debug("query_github_start", extra={"aspect": aspect, "repo_name": repo_name})
+    start = time.perf_counter()
+    result = _query_github_impl(aspect, repo_name)
+    latency_ms = round((time.perf_counter() - start) * 1000, 1)
+
+    error = result["error"] or ""
+    common = {"aspect": aspect, "repo_name": repo_name, "latency_ms": latency_ms}
+    if error == "rate_limited":
+        logger.warning("query_github_rate_limited", extra=common)
+    elif error.startswith("network_error"):
+        logger.warning("query_github_network_error", extra={**common, "error": error})
+    else:
+        result_size = len(result["data"]) if isinstance(result["data"], list) else int(bool(result["data"]))
+        logger.info(
+            "query_github_result",
+            extra={**common, "ok": result["ok"], "error": result["error"], "result_size": result_size},
+        )
+    return result
+
+
+def _query_github_impl(aspect: str, repo_name: str | None = None) -> GithubResult:
     """Query GitHub REST API v3 for the candidate's public repos.
 
     Never raises uncaught exceptions — all errors are returned as GithubResult.

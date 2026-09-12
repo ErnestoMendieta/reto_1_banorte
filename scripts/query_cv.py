@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 
 os.environ.setdefault("USE_TF", "0")  # avoid transformers loading TF/Keras 3 on this machine
 
@@ -12,6 +14,11 @@ import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from scripts.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 EMBEDDING_MODEL = os.environ.get(
@@ -58,7 +65,18 @@ def _load_model():
     if EMBEDDING_MODEL not in _model_cache:
         from sentence_transformers import SentenceTransformer
 
+        start = time.perf_counter()
         _model_cache[EMBEDDING_MODEL] = SentenceTransformer(EMBEDDING_MODEL)
+        logger.info(
+            "model_load",
+            extra={
+                "embedding_model": EMBEDDING_MODEL,
+                "cache_hit": False,
+                "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+            },
+        )
+    else:
+        logger.debug("model_load", extra={"embedding_model": EMBEDDING_MODEL, "cache_hit": True})
     return _model_cache[EMBEDDING_MODEL]
 
 
@@ -75,7 +93,12 @@ def query_cv(question: str, top_k: int = 4) -> list[ChunkResult]:
     model = _load_model()
     query_vec = _vec_to_pg(model.encode(question))
 
-    conn = psycopg2.connect(DATABASE_URL)
+    start = time.perf_counter()
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+    except Exception:
+        logger.exception("query_cv_error", extra={"question": question})
+        raise
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -94,7 +117,7 @@ def query_cv(question: str, top_k: int = 4) -> list[ChunkResult]:
     finally:
         conn.close()
 
-    return [
+    results = [
         ChunkResult(
             section=row[0],
             entry_title=row[1],
@@ -104,3 +127,15 @@ def query_cv(question: str, top_k: int = 4) -> list[ChunkResult]:
         for row in rows
         if float(row[3]) >= CV_SIMILARITY_THRESHOLD
     ]
+    logger.info(
+        "query_cv_result",
+        extra={
+            "question": question,
+            "top_k": top_k,
+            "num_results": len(results),
+            "top_similarity": float(rows[0][3]) if rows else None,
+            "below_threshold_count": len(rows) - len(results),
+            "latency_ms": round((time.perf_counter() - start) * 1000, 1),
+        },
+    )
+    return results
