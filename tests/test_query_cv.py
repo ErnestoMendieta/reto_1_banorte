@@ -1,6 +1,6 @@
 """Tests for query_cv tool.
 
-Unit tests run without a database (psycopg2 and sentence-transformers are mocked).
+Unit tests run without a database (psycopg2 and the OpenRouter embedding call are mocked).
 The integration test at the bottom requires a live DB and is skipped automatically
 when the database is unreachable.
 """
@@ -14,8 +14,8 @@ import pytest
 
 from scripts.query_cv import CV_SIMILARITY_THRESHOLD, query_cv
 
-# 384-dimensional zero vector — valid shape for paraphrase-multilingual-MiniLM-L12-v2
-_FAKE_EMB = [0.0] * 384
+# 768-dimensional zero vector — valid shape for google/gemini-embedding-2 (dimensions=768)
+_FAKE_EMB = [0.0] * 768
 
 
 def _mock_conn(rows: list[tuple]) -> tuple[MagicMock, MagicMock]:

@@ -20,7 +20,8 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "qwen/qwen3-embedding-0.6b")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "google/gemini-embedding-2")
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "768"))
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 CV_SIMILARITY_THRESHOLD = float(os.environ.get("CV_SIMILARITY_THRESHOLD", "0.15"))
@@ -63,7 +64,7 @@ def _embed(text: str) -> list[float]:
         resp = requests.post(
             f"{OPENROUTER_BASE_URL}/embeddings",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            json={"model": EMBEDDING_MODEL, "input": text},
+            json={"model": EMBEDDING_MODEL, "input": text, "dimensions": EMBEDDING_DIM},
             timeout=30,
         )
         resp.raise_for_status()

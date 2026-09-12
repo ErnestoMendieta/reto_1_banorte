@@ -1,4 +1,4 @@
-# Spec 07 — docker-compose local + Dockerfile + deploy Cloud Run/Supabase
+# Spec 07 — docker-compose local + Dockerfile + deploy Render/Supabase
 
 ## Objetivo
 
@@ -7,16 +7,23 @@ y dejar el pipeline de deploy a producción documentado y ejecutable, según
 lo definido en PRD §4/§6.
 
 **Historial de cambios de plataforma:**
-- (2026-09-12, primer cambio) Cloud Run + Cloud SQL → **Render + Supabase**,
+- (2026-09-12, cambio 1) Cloud Run + Cloud SQL → **Render + Supabase**,
   para evitar el costo de Cloud SQL (~$9 USD/mes, sin free tier).
-- (2026-09-12, segundo cambio) **Render + Supabase → Cloud Run + Supabase**.
-  Render free tier (512MB RAM) no alcanza para cargar `sentence-transformers`
-  /torch en `query_cv` — el proceso moría por OOM a media petición (502) en
-  cuanto una pregunta real disparaba el tool call (verificado en producción,
-  ver "Abierto / bloqueado"). Cloud Run permite `--memory 1Gi` sin costo
-  mientras el tráfico quede dentro del free tier (2M requests/mes); ya no
-  se usa Cloud SQL (la DB vive en Supabase), que era lo único que cobraba
-  en el plan original. Cero cambios al `Dockerfile`.
+- (2026-09-12, cambio 2) **Render + Supabase → Cloud Run + Supabase**.
+  Render free tier (512MB RAM) no alcanzaba para cargar
+  `sentence-transformers`/torch en `query_cv` — el proceso moría por OOM a
+  media petición (502) en cuanto una pregunta real disparaba el tool call
+  (verificado en producción). GCP resultó pedir un cargo de tarjeta (~500
+  MXN) para verificación de cuenta, inaceptable para el alcance del reto.
+- (2026-09-12, cambio 3, **definitivo**) **Cloud Run → de vuelta a Render**.
+  La causa real del OOM no era "poca RAM en general", era cargar un modelo
+  de embeddings local (torch) en el contenedor. Se movió el cálculo de
+  embeddings a la API de OpenRouter (`google/gemini-embedding-2`,
+  `scripts/query_cv.py`/`scripts/ingest_cv.py`) — el contenedor ya no carga
+  ningún modelo pesado, `sentence-transformers` se quitó de
+  `requirements.txt`, y el free tier de Render (512MB) vuelve a alcanzar.
+  Esto resuelve el problema de raíz sin pagar Render Starter ni usar GCP.
+  Cero cambios al `Dockerfile`.
 
 ## Dependencias
 
@@ -76,41 +83,35 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 (Ajustar nombre del módulo/app real de FastAPI al implementar spec 05.)
 
-### Deploy a producción (Cloud Run + Supabase)
+### Deploy a producción (Render + Supabase)
 
-Repo ya en GitHub (`ErnestoMendieta/reto_1_banorte`). Requiere `gcloud` CLI
-autenticado y un proyecto de GCP con billing habilitado (para activar la
-API de Cloud Run — no implica cobro si el uso queda dentro del free tier).
+Repo ya en GitHub (`ErnestoMendieta/reto_1_banorte`), deploy conectado
+directo desde ahí. Ambos con free tier permanente, sin tarjeta/billing.
 
 1. **Supabase** (Postgres + pgvector) — ya provisionado:
    - `create extension if not exists vector;` desde el SQL editor.
-   - Ingesta ya corrida una vez desde local apuntando `DATABASE_URL` a
-     Supabase: `python scripts/ingest_cv.py`.
-2. **Cloud Run** (app):
-   ```bash
-   gcloud services enable run.googleapis.com cloudbuild.googleapis.com
-   gcloud run deploy cv-agent \
-     --source . \
-     --region {region} \
-     --memory 1Gi \
-     --allow-unauthenticated \
-     --set-env-vars OPENROUTER_MODEL=google/gemini-3.6-flash,GITHUB_USERNAMES=ErnestoMendieta,ErnestoMCUpiit \
-     --set-env-vars DATABASE_URL="postgresql://postgres:{tu-password}@db.{project-ref}.supabase.co:5432/postgres" \
-     --set-env-vars OPENROUTER_API_KEY={tu-key},GITHUB_TOKEN={tu-token}
-   ```
-   `--source .` hace build (Cloud Build, usa el `Dockerfile` del repo tal
-   cual) + deploy en un solo comando — no hace falta Artifact Registry
-   manual. `--memory 1Gi` es el flag crítico: el default de Cloud Run es
-   512MB, la misma memoria que causó el OOM en Render.
-3. **Verificar**: `curl -X POST https://<servicio>.run.app/v1/responses
-   -H "Content-Type: application/json" -d '{"input": "..."}'`.
+   - Ingesta corrida desde local apuntando `DATABASE_URL` a Supabase:
+     `python scripts/ingest_cv.py` (embeddings vía OpenRouter
+     `google/gemini-embedding-2`, 768 dims — ver `DEPLOY.md` si migras
+     desde la tabla vieja de `sentence-transformers`, dim distinta).
+2. **Render** (app, Web Service):
+   - "New Web Service" → conectar el repo de GitHub → Environment:
+     Docker (usa el `Dockerfile` tal cual, sin cambios).
+   - Variables de entorno: `GITHUB_TOKEN`, `GITHUB_USERNAMES`,
+     `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `CV_TEX_PATH`, y
+     `DATABASE_URL` apuntando a Supabase. No hace falta `EMBEDDING_MODEL`/
+     `EMBEDDING_DIM` (los defaults del código ya coinciden con la ingesta).
+   - Puerto: Render detecta `EXPOSE 8080` del Dockerfile automáticamente.
+3. **Verificar**: `curl -X POST https://<servicio>.onrender.com/v1/responses
+   -H "Content-Type: application/json" -d '{"input": "..."}'` — probar con
+   una pregunta real que dispare `query_cv_tool`, no solo un input trivial
+   (así fue como apareció el OOM la primera vez).
 
 ## Fuera de alcance
 
-- CI/CD automatizado (GitHub Actions, Cloud Build triggers) — deploy
-  manual vía `gcloud run deploy` es suficiente para el reto.
-- Autoscaling tuning más allá de los defaults de Cloud Run.
-- VPC connector / red privada (no hay requisito de aislamiento de red).
+- CI/CD automatizado más allá del auto-deploy de Render on push a main.
+- Autoscaling / tuning de recursos más allá de los defaults del free tier.
+- VPC / red privada (no hay requisito de aislamiento de red).
 
 ## Criterios de aceptación
 
@@ -118,20 +119,20 @@ API de Cloud Run — no implica cobro si el uso queda dentro del free tier).
       localhost:8080/v1/responses` responde correctamente (mismo criterio
       que spec 05, pero corriendo dentro de Docker).
 - [x] La imagen de `app` se construye sin errores (`docker build .`).
-- [ ] El servicio desplegado en Cloud Run responde igual que en local
-      contra la DB de Supabase, incluyendo preguntas reales que disparan
-      `query_cv_tool` (no solo un input trivial) — esto es lo que reveló
-      el OOM en Render, hay que probarlo explícitamente, no basta un
-      smoke test superficial.
+- [x] Verificado localmente end-to-end contra Supabase con una pregunta
+      real (dispara `query_cv_tool`, retrieval correcto, sin cargar ningún
+      modelo local — ver historial de cambios arriba).
+- [ ] El servicio desplegado en Render responde igual que en local, con
+      una pregunta real (no un input trivial) — pendiente de confirmar
+      tras el redeploy con el código actualizado.
 
 ## Abierto / bloqueado
 
-- **Cloud Run escala a cero sin tráfico** (default) → cold start en la
-  primera request tras inactividad, igual que pasaba en Render. Aceptable
-  para evaluación del reto; `--min-instances 1` lo evita pero deja de ser
-  gratis.
-- **Incidente registrado**: el deploy en Render (free tier, 512MB RAM)
-  causó un crash por OOM en cuanto una pregunta real invocaba
-  `query_cv_tool` (carga de `sentence-transformers`/torch) — 502 a medio
-  request, contenedor reiniciado. Ver `DEPLOY.md` para el detalle. Por
-  esto se migró a Cloud Run con `--memory 1Gi`.
+- **Free tier de Render duerme el servicio tras 15 min sin tráfico**
+  (~30s de cold start al despertar). Aceptable para evaluación del reto.
+- **Incidente resuelto**: el deploy en Render (free tier, 512MB RAM) causó
+  un crash por OOM en cuanto una pregunta real invocaba `query_cv_tool`
+  (cargaba `sentence-transformers`/torch, ~800MB-1GB). Se resolvió
+  moviendo el embedding a la API de OpenRouter — ya no hay modelo pesado
+  en el contenedor, no hace falta ni GCP ni un plan pago de Render. Ver
+  `DEPLOY.md` para el detalle completo.

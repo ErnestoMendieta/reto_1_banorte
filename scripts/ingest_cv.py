@@ -20,30 +20,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from scripts.retry import call_with_rate_limit_retry
-
 DATABASE_URL = os.environ["DATABASE_URL"]
 CV_TEX_PATH = os.environ.get("CV_TEX_PATH", "./data/cv.tex")
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "qwen/qwen3-embedding-0.6b")
-EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "1024"))
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "google/gemini-embedding-2")
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "768"))
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 def _embed(text: str) -> list[float]:
-    """Get an embedding vector from OpenRouter (qwen3-embedding by default)."""
-
-    def _call():
-        resp = requests.post(
-            f"{OPENROUTER_BASE_URL}/embeddings",
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            json={"model": EMBEDDING_MODEL, "input": text},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return resp.json()["data"][0]["embedding"]
-
-    return call_with_rate_limit_retry(_call)
+    """Get an embedding vector from OpenRouter. No retry wrapper here (ingest is a
+    one-off batch of a dozen calls, not live traffic) — just rerun the script if a
+    429 hits; it's idempotent (TRUNCATE on full ingest, upsert on --reembed)."""
+    resp = requests.post(
+        f"{OPENROUTER_BASE_URL}/embeddings",
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+        json={"model": EMBEDDING_MODEL, "input": text, "dimensions": EMBEDDING_DIM},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["data"][0]["embedding"]
 
 
 # ── LaTeX parsing ──────────────────────────────────────────────────────────────

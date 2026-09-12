@@ -30,10 +30,12 @@ leer para saber qué sigue.
 - **Ingesta del CV (spec 01)**: la estructura exacta de macros LaTeX del
   `.tex` fuente aún no se ha inspeccionado — el parser debe ajustarse al
   archivo real una vez esté disponible en el repo.
-- **Deploy (spec 07)**: Cloud Run (app, `--memory 1Gi`) + Supabase
-  (Postgres/pgvector). Se probó Render primero pero su free tier (512MB)
-  no alcanza para `sentence-transformers`/torch en `query_cv` — OOM/502 en
-  producción. Ver `DEPLOY.md` y spec 07 para el historial completo.
+- **Deploy (spec 07)**: Render (app) + Supabase (Postgres/pgvector), ambos
+  free tier. El OOM/502 que dio Render al principio era por cargar
+  `sentence-transformers`/torch en `query_cv` — se resolvió calculando
+  embeddings vía la API de OpenRouter (`google/gemini-embedding-2`) en vez
+  de local; ya no hace falta GCP ni un plan pago. Ver `DEPLOY.md` y spec 07
+  para el historial completo.
 
 ## Convenciones para todas las specs
 
