@@ -10,25 +10,36 @@ from __future__ import annotations
 import argparse
 import json
 import os
-
-os.environ.setdefault("USE_TF", "0")  # avoid transformers loading TF/Keras 3 on this machine
-
 import re
 import sys
 from pathlib import Path
 
 import psycopg2
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 CV_TEX_PATH = os.environ.get("CV_TEX_PATH", "./data/cv.tex")
-EMBEDDING_MODEL = os.environ.get(
-    "EMBEDDING_MODEL",
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-)
-EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "384"))
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "google/gemini-embedding-2")
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "768"))
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _embed(text: str) -> list[float]:
+    """Get an embedding vector from OpenRouter. No retry wrapper here (ingest is a
+    one-off batch of a dozen calls, not live traffic) — just rerun the script if a
+    429 hits; it's idempotent (TRUNCATE on full ingest, upsert on --reembed)."""
+    resp = requests.post(
+        f"{OPENROUTER_BASE_URL}/embeddings",
+        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+        json={"model": EMBEDDING_MODEL, "input": text, "dimensions": EMBEDDING_DIM},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()["data"][0]["embedding"]
 
 
 # ── LaTeX parsing ──────────────────────────────────────────────────────────────
@@ -189,11 +200,7 @@ def full_ingest(conn) -> None:
     """Parse CV, truncate tables, insert all chunks and embeddings."""
     chunks = parse_cv(CV_TEX_PATH)
     print(f"Parsed {len(chunks)} chunks from {CV_TEX_PATH}")
-
-    from sentence_transformers import SentenceTransformer
-
-    model = SentenceTransformer(EMBEDDING_MODEL)
-    print(f"Loaded embedding model: {EMBEDDING_MODEL}")
+    print(f"Embedding model: {EMBEDDING_MODEL} (OpenRouter)")
 
     with conn.cursor() as cur:
         cur.execute("TRUNCATE cv_documents CASCADE")
@@ -209,7 +216,7 @@ def full_ingest(conn) -> None:
                 ),
             )
             doc_id = cur.fetchone()[0]
-            emb = model.encode(chunk["content"]).tolist()
+            emb = _embed(chunk["content"])
             cur.execute(
                 "INSERT INTO cv_embeddings (document_id, model_name, embedding)"
                 " VALUES (%s, %s, %s::vector)",
@@ -234,14 +241,11 @@ def reembed_only(conn) -> None:
         print("cv_documents está vacía — corre sin --reembed primero.")
         sys.exit(1)
 
-    from sentence_transformers import SentenceTransformer
-
-    model = SentenceTransformer(EMBEDDING_MODEL)
-    print(f"Re-embebiendo {len(docs)} chunks con {EMBEDDING_MODEL}")
+    print(f"Re-embebiendo {len(docs)} chunks con {EMBEDDING_MODEL} (OpenRouter)")
 
     with conn.cursor() as cur:
         for i, (doc_id, content) in enumerate(docs, 1):
-            emb = model.encode(content).tolist()
+            emb = _embed(content)
             cur.execute(
                 "INSERT INTO cv_embeddings (document_id, model_name, embedding)"
                 " VALUES (%s, %s, %s::vector)"
