@@ -25,28 +25,27 @@ EMBEDDING_MODEL = os.environ.get(
     "EMBEDDING_MODEL",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 )
-CV_SIMILARITY_THRESHOLD = float(os.environ.get("CV_SIMILARITY_THRESHOLD", "0.3"))
+CV_SIMILARITY_THRESHOLD = float(os.environ.get("CV_SIMILARITY_THRESHOLD", "0.15"))
 
 _model_cache: dict = {}
 
 TOOL_SCHEMA = {
     "name": "query_cv",
     "description": (
-        "Busca información en el CV del candidato (experiencia, educación, skills, "
-        "proyectos) relevante a una pregunta. Devuelve únicamente texto extraído del "
-        "CV, nunca información inventada."
+        "Busca en el CV del candidato (experiencia, educación, skills, proyectos) "
+        "fragmentos relevantes a una pregunta. Solo texto extraído del CV, nunca inventado."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "question": {
                 "type": "string",
-                "description": "Pregunta o tema a buscar en el CV, en lenguaje natural.",
+                "description": "Pregunta o tema a buscar en el CV.",
             },
             "top_k": {
                 "type": "integer",
                 "description": "Número de fragmentos a devolver.",
-                "default": 4,
+                "default": 8,
             },
         },
         "required": ["question"],
@@ -84,7 +83,7 @@ def _vec_to_pg(vec: list[float]) -> str:
     return "[" + ",".join(f"{x:.8f}" for x in vec) + "]"
 
 
-def query_cv(question: str, top_k: int = 4) -> list[ChunkResult]:
+def query_cv(question: str, top_k: int = 8) -> list[ChunkResult]:
     """Return top_k CV chunks semantically closest to question.
 
     Chunks below CV_SIMILARITY_THRESHOLD (env var, default 0.3) are dropped.

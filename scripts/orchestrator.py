@@ -41,7 +41,7 @@ class AgentState(TypedDict):
 
 
 @tool
-def query_cv_tool(question: str, top_k: int = 4) -> str:
+def query_cv_tool(question: str, top_k: int = 8) -> str:
     """Busca información en el CV del candidato (experiencia, educación, skills, proyectos) relevante a una pregunta.
 
     Usa vocabulario cercano al CV (nombres de empresas/instituciones, títulos de puesto,

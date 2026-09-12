@@ -65,7 +65,7 @@ def test_filters_below_threshold(mock_load, mock_connect):
 
 @patch("scripts.query_cv.psycopg2.connect")
 @patch("scripts.query_cv._load_model")
-def test_default_top_k_is_four(mock_load, mock_connect):
+def test_default_top_k_is_eight(mock_load, mock_connect):
     mock_load.return_value.encode.return_value = _FAKE_EMB
     conn, cursor = _mock_conn([])
     mock_connect.return_value = conn
@@ -73,7 +73,7 @@ def test_default_top_k_is_four(mock_load, mock_connect):
     query_cv("pregunta de prueba")
 
     params = cursor.execute.call_args[0][1]
-    assert params[-1] == 4
+    assert params[-1] == 8
 
 
 @patch("scripts.query_cv.psycopg2.connect")

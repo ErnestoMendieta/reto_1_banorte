@@ -34,10 +34,8 @@ ALLOWED_REPOS: set[str] = (
 TOOL_SCHEMA = {
     "name": "query_github",
     "description": (
-        "Consulta los repositorios públicos de GitHub del candidato, que puede tener "
-        "repos repartidos en más de una cuenta: lista de repos (con su owner), "
-        "detalle de un repo, lenguajes usados, contenido del README, o actividad "
-        "reciente (commits)."
+        "Consulta los repos públicos de GitHub del candidato (puede tener varias cuentas): "
+        "lista de repos, detalle, lenguajes, README o commits recientes."
     ),
     "parameters": {
         "type": "object",
@@ -45,21 +43,20 @@ TOOL_SCHEMA = {
             "aspect": {
                 "type": "string",
                 "enum": ["list_repos", "repo_overview", "languages", "readme", "activity"],
-                "description": "Qué aspecto consultar.",
+                "description": (
+                    "Qué consultar: list_repos, repo_overview (descripción/stars/forks), "
+                    "languages, readme, o activity (últimos commits)."
+                ),
             },
             "repo_name": {
                 "type": "string",
-                "description": (
-                    "Nombre del repo (sin owner). Requerido para todo aspecto "
-                    "excepto 'list_repos'."
-                ),
+                "description": "Nombre del repo (sin owner). Requerido salvo en 'list_repos'.",
             },
             "owner": {
                 "type": "string",
                 "description": (
-                    "Cuenta de GitHub dueña del repo. Tómalo del campo 'owner' que "
-                    "devuelve list_repos para ese repo. Si se omite, se usa la cuenta "
-                    "principal del candidato."
+                    "Cuenta dueña del repo (campo 'owner' de list_repos). "
+                    "Si se omite, usa la cuenta principal del candidato."
                 ),
             },
         },
