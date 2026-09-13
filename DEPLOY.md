@@ -32,7 +32,6 @@ Reemplaza los marcadores `{...}` con tus valores reales.
    DATABASE_URL="postgresql://postgres:{tu-password}@db.{project-ref}.supabase.co:5432/postgres" \
      python scripts/ingest_cv.py
    ```
-<<<<<<< HEAD
    Esto crea `cv_documents`/`cv_embeddings` (embeddings vía OpenRouter,
    `google/gemini-embedding-2`, 768 dims) y carga el CV. Vuelve a correrlo
    (sin `--reembed`) si cambias `data/cv.tex`; es idempotente (usa
@@ -41,11 +40,6 @@ Reemplaza los marcadores `{...}` con tus valores reales.
    > `sentence-transformers` (384 dims), borra la tabla vieja primero —
    > la dimensión cambió: `DROP TABLE IF EXISTS cv_embeddings CASCADE;`
    > (vía SQL Editor de Supabase o `psql`), luego corre la ingesta de nuevo.
-=======
-   Esto crea `cv_documents`/`cv_embeddings` y carga el CV. Vuelve a correrlo
-   (sin `--reembed`) si cambias `data/cv.tex`; es idempotente (usa
-   `TRUNCATE CASCADE`).
->>>>>>> fcbfc0a1081aab92ae780a2b3a6473d99db0400e
 
 ## 2. Render — servicio web
 
@@ -61,16 +55,11 @@ Reemplaza los marcadores `{...}` con tus valores reales.
    GITHUB_USERNAMES=ErnestoMendieta,ErnestoMCUpiit
    DATABASE_URL=postgresql://postgres:{tu-password}@db.{project-ref}.supabase.co:5432/postgres
    ```
-<<<<<<< HEAD
    No hace falta `EMBEDDING_MODEL`/`EMBEDDING_DIM` — los defaults del código
    (`google/gemini-embedding-2`, 768) ya coinciden con la ingesta. No pongas
-   `LOG_FORMAT` (deja el default `json`). No pongas `PORT` — Render lo
-   inyecta solo y el `Dockerfile` ya lo respeta (`${PORT:-8080}`).
-=======
-   No pongas `LOG_FORMAT` (deja el default `json`, así los logs de Render
-   quedan parseables). No pongas `PORT` — Render lo inyecta solo y el
-   `Dockerfile` ya lo respeta (`${PORT:-8080}`).
->>>>>>> fcbfc0a1081aab92ae780a2b3a6473d99db0400e
+   `LOG_FORMAT` (deja el default `json`, así los logs de Render quedan
+   parseables). No pongas `PORT` — Render lo inyecta solo y el `Dockerfile`
+   ya lo respeta (`${PORT:-8080}`).
 4. Deploy. Prueba:
    ```bash
    curl -X POST https://{tu-servicio}.onrender.com/v1/responses \
@@ -94,12 +83,9 @@ Reemplaza los marcadores `{...}` con tus valores reales.
   tráfico real de varios usuarios a la vez la cuota se agota igual — el
   retry amortigua, no elimina el límite. Sube de tier en OpenRouter cuando
   el tráfico lo justifique.
-<<<<<<< HEAD
 - **Costo de embeddings por OpenRouter**: pago por token, pero para el
   volumen de este reto (ingesta única de ~12 chunks + preguntas puntuales)
   es de fracciones de centavo de dólar en total.
-=======
->>>>>>> fcbfc0a1081aab92ae780a2b3a6473d99db0400e
 
 ---
 
