@@ -32,6 +32,80 @@ def _err(msg: str, *, reason: str, **fields) -> JSONResponse:
     return JSONResponse({"error": {"message": msg}}, status_code=400)
 
 
+def _extract_text(content) -> str:
+    """Normalize message content into plain text.
+
+    Accepts our minimal plain-string format or the real Open Responses/OpenAI
+    format, where content is a list of parts (e.g. [{"type": "input_text",
+    "text": "..."}]). Passing that list straight into HumanMessage(content=...)
+    reaches the LLM as an empty turn — that's what caused the "contents is not
+    specified" 400 from Gemini. Non-text parts (images, etc.) are dropped; this
+    API only supports text.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            part.get("text", "") for part in content if isinstance(part, dict) and "text" in part
+        )
+    return str(content)
+
+
+@app.get("/.well-known/agent-card.json")
+async def agent_card(request: Request) -> JSONResponse:
+    """A2A agent card — describe el agente y apunta al endpoint Open Responses.
+
+    `url` se arma desde el host de la request en vez de hardcodearse, así
+    sirve igual en local, docker-compose o el dominio real de Render/GCP.
+    """
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(
+        {
+            "name": "CV Agent — Ernesto Mendieta Cuecuecha",
+            "description": (
+                "Agente conversacional que responde preguntas sobre la experiencia "
+                "laboral, educación, proyectos, habilidades y repositorios públicos "
+                "de GitHub de Ernesto Mendieta Cuecuecha, candidato a Ingeniero en IA."
+            ),
+            "version": "1.0.0",
+            "url": f"{base_url}/v1/responses",
+            "provider": {"name": "Ernesto Mendieta Cuecuecha"},
+            "capabilities": {
+                "streaming": False,
+                "pushNotifications": False,
+                "extendedAgentCard": False,
+            },
+            "defaultInputModes": ["text/plain"],
+            "defaultOutputModes": ["text/plain"],
+            "skills": [
+                {
+                    "id": "query-cv",
+                    "name": "Consultar CV",
+                    "description": (
+                        "Responde preguntas sobre experiencia laboral, educación, "
+                        "proyectos y habilidades del candidato, basado únicamente "
+                        "en el contenido de su CV."
+                    ),
+                    "tags": ["cv", "experiencia", "educacion"],
+                    "examples": ["¿Cuál es la experiencia laboral de Ernesto?"],
+                },
+                {
+                    "id": "query-github",
+                    "name": "Consultar GitHub",
+                    "description": (
+                        "Consulta los repositorios públicos de GitHub del candidato: "
+                        "lista de repos, lenguajes, README y actividad reciente."
+                    ),
+                    "tags": ["github", "repositorios"],
+                    "examples": ["¿Qué lenguajes usa más en sus proyectos de GitHub?"],
+                },
+            ],
+            "securitySchemes": [],
+            "security": [],
+        }
+    )
+
+
 @app.post("/v1/responses")
 async def create_response(request: Request) -> JSONResponse:
     start = time.perf_counter()
@@ -67,7 +141,7 @@ async def create_response(request: Request) -> JSONResponse:
                     reason="bad_shape",
                 )
             cls = role_map.get(m.get("role", "user"), HumanMessage)
-            new_messages.append(cls(content=m["content"]))
+            new_messages.append(cls(content=_extract_text(m["content"])))
         if not new_messages:
             return _err("'input' array must not be empty.", reason="empty_input")
     else:

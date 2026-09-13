@@ -52,6 +52,35 @@ def test_missing_input_returns_400():
     assert "message" in resp.json()["error"]
 
 
+def test_content_parts_array_is_extracted_to_text():
+    """Real Open Responses clients send content as [{"type": "input_text", "text": ...}],
+    not a plain string — this must not reach the LLM as an empty turn."""
+    captured = {}
+
+    def _capturing_run_agent(messages, state=None):
+        captured["messages"] = messages
+        return _fake_run_agent(messages, state)
+
+    body = {"input": [{"role": "user", "content": [{"type": "input_text", "text": "hola agente"}]}]}
+    with patch("scripts.api.run_agent", side_effect=_capturing_run_agent):
+        resp = client.post("/v1/responses", json=body)
+
+    assert resp.status_code == 200
+    assert captured["messages"][0].content == "hola agente"
+
+
+def test_agent_card_points_to_open_responses_endpoint():
+    """GET /.well-known/agent-card.json returns an A2A card whose url is /v1/responses."""
+    resp = client.get("/.well-known/agent-card.json")
+    assert resp.status_code == 200
+    data = resp.json()
+    for field in ("name", "description", "version", "url", "skills"):
+        assert field in data
+    assert data["url"].endswith("/v1/responses")
+    assert len(data["skills"]) > 0
+    assert all({"id", "name", "description"} <= skill.keys() for skill in data["skills"])
+
+
 def test_empty_string_input_returns_400():
     resp = client.post("/v1/responses", json={"input": ""})
     assert resp.status_code == 400
