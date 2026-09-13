@@ -32,6 +32,25 @@ def _err(msg: str, *, reason: str, **fields) -> JSONResponse:
     return JSONResponse({"error": {"message": msg}}, status_code=400)
 
 
+def _extract_text(content) -> str:
+    """Normalize message content into plain text.
+
+    Accepts our minimal plain-string format or the real Open Responses/OpenAI
+    format, where content is a list of parts (e.g. [{"type": "input_text",
+    "text": "..."}]). Passing that list straight into HumanMessage(content=...)
+    reaches the LLM as an empty turn — that's what caused the "contents is not
+    specified" 400 from Gemini. Non-text parts (images, etc.) are dropped; this
+    API only supports text.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            part.get("text", "") for part in content if isinstance(part, dict) and "text" in part
+        )
+    return str(content)
+
+
 @app.get("/.well-known/agent-card.json")
 async def agent_card(request: Request) -> JSONResponse:
     """A2A agent card — describe el agente y apunta al endpoint Open Responses.
@@ -122,7 +141,7 @@ async def create_response(request: Request) -> JSONResponse:
                     reason="bad_shape",
                 )
             cls = role_map.get(m.get("role", "user"), HumanMessage)
-            new_messages.append(cls(content=m["content"]))
+            new_messages.append(cls(content=_extract_text(m["content"])))
         if not new_messages:
             return _err("'input' array must not be empty.", reason="empty_input")
     else:
